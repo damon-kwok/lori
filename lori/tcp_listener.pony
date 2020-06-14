@@ -2,7 +2,7 @@ actor TCPListener
   var _host: String ="0.0.0.0"
   var _port: String =""
   var _fd: U32 = -1
-  let _auth: TCPListenerAuth val
+  // let _auth: TCPListenerAuth val
   var _state: TCPConnectionState = Closed
   var _event: AsioEventID = AsioEvent.none()
   let _on_accept: {(U32): TCPConnection} val
@@ -17,13 +17,12 @@ actor TCPListener
     on_failure': (None | {()} val) =None,
     on_listening': (None | {()} val) =None)
   =>
-    _auth = auth
+    // _auth = auth
     _on_accept = match on_accept'
     | let fn: {(U32): TCPConnection} val => fn
     else
       {(fd: U32):TCPConnection => TCPConnection.accept(TCPAcceptAuth(auth), fd, out) }
     end
-
     _on_closed = match on_closed'
     | let fn: {()} val => fn
     else {()=> out.print("Echo server shut down.") }
@@ -36,6 +35,12 @@ actor TCPListener
     | let fn: {()} val => fn
     else {()=> out.print("Echo server started.") }
     end
+
+  new none() =>
+    _on_accept = {(fd: U32):TCPConnection => TCPConnection.none() }
+    _on_closed = {()=> None }
+    _on_failure = {()=> None }
+    _on_listening = {()=> None }
 
   be listen(host: String val, port: String val) =>
     _host = host

@@ -11,7 +11,6 @@ actor TCPConnection
   var _read_buffer_size: USize = 16384
   var _expect: USize = 0
 
-  // let _enclosing: (TCPClientActor ref | TCPAcceptActor ref | None)
   let _on_closed: {()} val
   let _on_received: {(Array[U8] iso)} val
   let _on_throttled: {()} val
@@ -23,7 +22,6 @@ actor TCPConnection
     port: String,
     from: String,
     out : OutStream,
-    // enclosing: TCPClientActor ref)
     on_connected: (None | {()} val) =None,
     on_closed: (None | {()} val) =None,
     on_received: (None | {(Array[U8] iso)} val) =None,
@@ -31,7 +29,6 @@ actor TCPConnection
     on_unthrottled: (None | {()} val) =None)
   =>
     // TODO: handle happy eyeballs here - connect count
-    // _enclosing = enclosing
     _on_closed = match on_closed
     | let fn: {()} val => fn
     else {()=> out.print("Connection Closed.") }
@@ -58,14 +55,12 @@ actor TCPConnection
   new accept(auth: TCPAcceptorAuth,
     fd': U32,
     out : OutStream,
-    // enclosing: TCPAcceptActor ref)
     on_closed: (None | {()} val) = None,
     on_received: (None | {(Array[U8] iso)} val) =None,
     on_throttled: (None | {()} val) =None,
     on_unthrottled: (None | {()} val) = None)
   =>
     _fd = fd'
-    // _enclosing = enclosing
     _on_closed = match on_closed
     | let fn: {()} val => fn
     else {()=> out.print("Connection Closed.") }

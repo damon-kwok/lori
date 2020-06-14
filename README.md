@@ -28,3 +28,14 @@ actor Main
       server.listen("0.0.0.0", "7669")
     end
 ```
+
+### EchoClient
+```pony
+actor Main
+  new create(env: Env) =>
+    try
+      let auth = TCPConnectAuth(env.root as AmbientAuth)
+      let client = TCPConnection(auth, env.out)
+      server.listen(auth, "0.0.0.0", "7669", "localhost", env.out)
+    end
+```
