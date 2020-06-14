@@ -1,51 +1,101 @@
 use "collections"
 
-type OutgoingTCPAuth is (AmbientAuth |
-  NetAuth |
-  TCPAuth |
-  TCPConnectAuth)
-
-type IncomingTCPAuth is (AmbientAuth |
-  NetAuth |
-  TCPAuth |
-  TCPServerAuth)
-
-class TCPConnection
-  var fd: U32 = -1
+actor TCPConnection
+  var _fd: U32 = -1
   var _event: AsioEventID = AsioEvent.none()
   var _state: U32 = 0
-  let _enclosing: (TCPClientActor ref | TCPServerActor ref | None)
+  
   let _pending: List[(ByteSeq, USize)] = _pending.create()
   var _read_buffer: Array[U8] iso = recover Array[U8] end
   var _bytes_in_read_buffer: USize = 0
   var _read_buffer_size: USize = 16384
   var _expect: USize = 0
 
-  new client(auth: OutgoingTCPAuth,
+  // let _enclosing: (TCPClientActor ref | TCPAcceptActor ref | None)
+  let _on_closed: {()} val
+  let _on_received: {(Array[U8] iso)} val
+  let _on_throttled: {()} val
+  let _on_unthrottled: {()} val
+  let _on_connected: {()} val
+
+  new client(auth: TCPConnectorAuth,
     host: String,
     port: String,
     from: String,
-    enclosing: TCPClientActor ref)
+    out : OutStream,
+    // enclosing: TCPClientActor ref)
+    on_connected: (None | {()} val) =None,
+    on_closed: (None | {()} val) =None,
+    on_received: (None | {(Array[U8] iso)} val) =None,
+    on_throttled: (None | {()} val) = None,
+    on_unthrottled: (None | {()} val) =None)
   =>
     // TODO: handle happy eyeballs here - connect count
-    _enclosing = enclosing
-    PonyTCP.connect(enclosing, host, port, from,
+    // _enclosing = enclosing
+    _on_closed = match on_closed
+    | let fn: {()} val => fn
+    else {()=> out.print("Connection Closed.") }
+    end
+    _on_connected = match on_connected
+    | let fn: {()} val => fn
+    else {()=> out.print("We have a new connection!") }
+    end
+    _on_received = match on_received
+    | let fn: {(Array[U8] iso)} val => fn
+    else {(data: Array[U8] iso)=> out.print("Data received. Echoing it back..") }
+    end
+    _on_throttled = match on_throttled
+    | let fn: {()} val => fn
+    else {()=> out.print("Throttled!") }
+    end
+    _on_unthrottled = match on_unthrottled
+    | let fn: {()} val => fn
+    else {()=> out.print("Unthrottled!") }
+    end
+    PonyTCP.connect(this, host, port, from,
       AsioEvent.read_write_oneshot())
 
-  new server(auth: IncomingTCPAuth,
+  new accept(auth: TCPAcceptorAuth,
     fd': U32,
-    enclosing: TCPServerActor ref)
+    out : OutStream,
+    // enclosing: TCPAcceptActor ref)
+    on_closed: (None | {()} val) = None,
+    on_received: (None | {(Array[U8] iso)} val) =None,
+    on_throttled: (None | {()} val) =None,
+    on_unthrottled: (None | {()} val) = None)
   =>
-    fd = fd'
-    _enclosing = enclosing
-    _event = PonyAsio.create_event(enclosing, fd)
-    open()
+    _fd = fd'
+    // _enclosing = enclosing
+    _on_closed = match on_closed
+    | let fn: {()} val => fn
+    else {()=> out.print("Connection Closed.") }
+    end
+    _on_connected = {()=> None }
+    _on_received = match on_received
+    | let fn: {(Array[U8] iso)} val => fn
+    else {(data: Array[U8] iso)=> out.print("Data received. Echoing it back..") }
+    end
+    _on_throttled = match on_throttled
+    | let fn: {()} val => fn
+    else {()=> out.print("Throttled!") }
+    end
+    _on_unthrottled = match on_unthrottled
+    | let fn: {()} val => fn
+    else {()=> out.print("Unthrottled!") }
+    end
+    _event = PonyAsio.create_event(this, _fd)
+    _open()
 
   new none() =>
-    """
-    For initializing an empty variable
-    """
-    _enclosing = None
+    // """
+    // For initializing an empty variable
+    // """
+    // _enclosing = None
+    _on_closed = {()=> None }
+    _on_connected = {()=> None }
+    _on_received = {(data: Array[U8] iso)=> None }
+    _on_throttled = {()=> None }
+    _on_unthrottled = {()=> None }
 
   fun ref expect(qty: USize) ? =>
     if qty <= _read_buffer_size then
@@ -57,7 +107,7 @@ class TCPConnection
       error
     end
 
-  fun ref open() =>
+  fun ref _open() =>
     // TODO: should this be private? I think so.
     // I don't think the actor that is using the connection should
     // ever need this.
@@ -71,19 +121,19 @@ class TCPConnection
   fun is_open(): Bool =>
     BitSet.is_set(_state, 0)
 
-  fun ref close() =>
+  be close() =>
     if is_open() then
       _state = BitSet.unset(_state, 0)
       unwriteable()
-      PonyTCP.shutdown(fd)
+      PonyTCP.shutdown(_fd)
       PonyAsio.unsubscribe(_event)
-      fd = -1
+      _fd = -1
     end
 
   fun is_closed(): Bool =>
     not is_open()
 
-  fun ref send(data: ByteSeq) =>
+  be send(data: ByteSeq) =>
     if is_open() then
       if is_writeable() then
         if has_pending_writes() then
@@ -144,63 +194,57 @@ class TCPConnection
   fun ref writeable() =>
     _state = BitSet.set(_state, 1)
 
-  fun ref unwriteable() =>
+  be unwriteable() =>
     _state = BitSet.unset(_state, 1)
 
-  fun ref read() =>
-    match _enclosing
-    | let s: TCPConnectionActor ref =>
-      try
-        if is_open() then
-          var total_bytes_read: USize = 0
+  fun ref _read() =>
+    try
+      if is_open() then
+        var total_bytes_read: USize = 0
 
-          // TODO: this probably shouldn't be "while true"
-          while true do
-            // Handle any data already in the read buffer
-            while _there_is_buffered_read_data() do
-              let bytes_to_consume = if _expect == 0 then
-                // if we aren't getting in `_expect` chunks,
-                // we should grab all the bytes that are currently available
-                _bytes_in_read_buffer
-              else
-                _expect
-              end
-
-              let x = _read_buffer = recover Array[U8] end
-              (let data', _read_buffer) = (consume x).chop(bytes_to_consume)
-              _bytes_in_read_buffer = _bytes_in_read_buffer - bytes_to_consume
-
-              s.on_received(consume data')
+        // TODO: this probably shouldn't be "while true"
+        while true do
+          // Handle any data already in the read buffer
+          while _there_is_buffered_read_data() do
+            let bytes_to_consume = if _expect == 0 then
+              // if we aren't getting in `_expect` chunks,
+              // we should grab all the bytes that are currently available
+              _bytes_in_read_buffer
+            else
+              _expect
             end
 
-            if total_bytes_read >= _read_buffer_size then
-              s._read_again()
-              return
-            end
+            let x = _read_buffer = recover Array[U8] end
+            (let data', _read_buffer) = (consume x).chop(bytes_to_consume)
+            _bytes_in_read_buffer = _bytes_in_read_buffer - bytes_to_consume
 
-            _resize_read_buffer_if_needed()
-
-            let bytes_read = PonyTCP.receive(_event,
-              _read_buffer.cpointer(_bytes_in_read_buffer),
-              _read_buffer.size() - _bytes_in_read_buffer)?
-
-            if bytes_read == 0 then
-              // would block. try again later
-              _mark_unreadable()
-              return
-            end
-
-            _bytes_in_read_buffer = _bytes_in_read_buffer + bytes_read
-            total_bytes_read = total_bytes_read + bytes_read
+            _on_received(consume data')
           end
+
+          if total_bytes_read >= _read_buffer_size then
+            _read_again()
+            return
+          end
+
+          _resize_read_buffer_if_needed()
+
+          let bytes_read = PonyTCP.receive(_event,
+            _read_buffer.cpointer(_bytes_in_read_buffer),
+            _read_buffer.size() - _bytes_in_read_buffer)?
+
+          if bytes_read == 0 then
+            // would block. try again later
+            _mark_unreadable()
+            return
+          end
+
+          _bytes_in_read_buffer = _bytes_in_read_buffer + bytes_read
+          total_bytes_read = total_bytes_read + bytes_read
         end
-      else
-        // Socket shutdown from other side
-        close()
       end
-    | None =>
-      // TODO: SHOULD WE BLOW UP WITH SOME SORT OF UNREACHABLE HERE?
-      None
+    else
+      // Socket shutdown from other side
+      close()
     end
 
   fun _there_is_buffered_read_data(): Bool =>
@@ -215,27 +259,15 @@ class TCPConnection
     end
 
   fun ref _apply_backpressure() =>
-    match _enclosing
-    | let s: TCPConnectionActor ref =>
-      if not is_throttled() then
-        throttled()
-        s.on_throttled()
-      end
-    | None =>
-      // TODO: Blow up here!
-      None
+    if not is_throttled() then
+      throttled()
+      _on_throttled()
     end
 
   fun ref _release_backpressure() =>
-    match _enclosing
-    | let s: TCPConnectionActor ref =>
-      if is_throttled() then
-        unthrottled()
-        s.on_unthrottled()
-      end
-    | None =>
-      // TODO: blow up here
-      None
+    if is_throttled() then
+      unthrottled()
+      _on_unthrottled()
     end
 
   fun is_throttled(): Bool =>
@@ -255,29 +287,26 @@ class TCPConnection
   fun has_pending_writes(): Bool =>
     _pending.size() != 0
 
-  fun ref event_notify(event: AsioEventID,
+  be _event_notify(event: AsioEventID,
     flags: U32,
     arg: U32)
   =>
-    match _enclosing
-    | let c: TCPClientActor ref =>
-      if event isnt _event then
-        if AsioEvent.writeable(flags) then
-          // TODO: this assumes the connection succeed. That might not be true.
-          // more logic needs to go here
-          fd = PonyAsio.event_fd(event)
-          _event = event
-          open()
-          c.on_connected()
-          read()
-        end
+    if event isnt _event then
+      if AsioEvent.writeable(flags) then
+        // TODO: this assumes the connection succeed. That might not be true.
+        // more logic needs to go here
+        _fd = PonyAsio.event_fd(event)
+        _event = event
+        _open()
+        _on_connected()
+        _read()
       end
     end
 
     if event is _event then
       if AsioEvent.readable(flags) then
         // should set that we are readable
-        read()
+        _read()
       end
 
       if AsioEvent.writeable(flags) then
@@ -297,3 +326,9 @@ class TCPConnection
     // changing this. need a switch based on flags that we do not have at
     // the moment
     PonyAsio.resubscribe_read(_event)
+
+  be _read_again() =>
+    """
+    Resume reading
+    """
+    _read()

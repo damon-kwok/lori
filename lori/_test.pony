@@ -10,9 +10,9 @@ actor Main is TestList
 
   fun tag tests(test: PonyTest) =>
     test(_BitSet)
-    test(_TCPConnectionState)
-    test(_PingPong)
-    test(_TestBasicExpect)
+    // test(_TCPConnectionState)
+    // test(_PingPong)
+    // test(_TestBasicExpect)
 
 class iso _BitSet is UnitTest
   fun name(): String => "BitSet"
@@ -34,7 +34,7 @@ class iso _BitSet is UnitTest
     x = BitSet.unset(x, 0)
     h.assert_false(BitSet.is_set(x, 0))
     h.assert_true(BitSet.is_set(x, 1))
-
+/*
 class iso _TCPConnectionState is UnitTest
   """
   Test that connection state works correctly
@@ -277,3 +277,4 @@ actor _TestBasicExpectServer is TCPServerActor
       _h.complete_action("expected data received")
       _connection.close()
     end
+*/

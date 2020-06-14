@@ -14,6 +14,18 @@ primitive TCPConnectAuth
   new create(from: (AmbientAuth | NetAuth | TCPAuth)) =>
     None
 
-primitive TCPServerAuth
+primitive TCPAcceptAuth
   new create(from: (AmbientAuth | NetAuth | TCPAuth | TCPListenAuth)) =>
     None
+
+type TCPListenerAuth is (AmbientAuth | NetAuth | TCPAuth | TCPListenAuth)
+
+type TCPConnectorAuth is (AmbientAuth |
+  NetAuth |
+  TCPAuth |
+  TCPConnectAuth)
+
+type TCPAcceptorAuth is (AmbientAuth |
+  NetAuth |
+  TCPAuth |
+  TCPAcceptAuth)

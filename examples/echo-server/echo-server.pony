@@ -4,9 +4,10 @@ actor Main
   new create(env: Env) =>
     try
       let auth = TCPListenAuth(env.root as AmbientAuth)
-      let echo = EchoServer(auth, "", "7669", env.out)
+      let server = TCPListener(auth, env.out)
+      server.listen("", "7669")
     end
-
+/*
 actor EchoServer is TCPListenerActor
   var _listener: TCPListener = TCPListener.none()
   let _out: OutStream
@@ -57,3 +58,4 @@ actor Echoer is TCPConnectionActor
   fun ref on_received(data: Array[U8] iso) =>
     _out.print("Data received. Echoing it back.")
     _connection.send(consume data)
+*/

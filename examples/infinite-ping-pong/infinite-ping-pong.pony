@@ -1,14 +1,15 @@
 use "../../lori"
 
 // test app to drive the library
-
 actor Main
   new create(env: Env) =>
-    try
-      let listen_auth = TCPListenAuth(env.root as AmbientAuth)
-      let connect_auth = TCPConnectAuth(env.root as AmbientAuth)
-      Listener(listen_auth, connect_auth, env.out)
-    end
+    env.out.print("123")
+    // try
+      // let listen_auth = TCPListenAuth(env.root as AmbientAuth)
+      // let connect_auth = TCPConnectAuth(env.root as AmbientAuth)
+      // Listener(listen_auth, connect_auth, env.out)
+    // end
+/*
 
 actor  Listener is TCPListenerActor
   var _listener: TCPListener = TCPListener.none()
@@ -74,3 +75,4 @@ actor Client is TCPClientActor
   fun ref on_received(data: Array[U8] iso) =>
    _out.print(consume data)
    _connection.send("Ping")
+*/
