@@ -18,7 +18,7 @@ This is an experimental project and shouldn't be used in a production environmen
 
 ## Example
 
-### EchoServer
+### Server
 ```pony
 actor Main
   new create(env: Env) =>
@@ -29,7 +29,7 @@ actor Main
     end
 ```
 
-### EchoClient
+### Client
 ```pony
 actor Main
   new create(env: Env) =>
@@ -38,3 +38,34 @@ actor Main
       TCPConnection.client(auth, "0.0.0.0", "7669", "localhost", env.out)
     end
 ```
+
+### PingPong
+
+``` pony
+### Ping-Pong
+````pony
+actor Main
+  new create(env: Env) =>
+    try
+      // auth
+      let listen_auth = TCPListenAuth(env.root as AmbientAuth)
+      let connect_auth = TCPConnectAuth(env.root as AmbientAuth)
+
+      // server
+      let server = TCPListener(listen_auth, env.out)
+      server.on_received({(conn: TCPConnection, data: Array[U8] iso) =>
+                      _out.print(consume data)
+                      _connection.send("Pong") })
+      server.listen("0.0.0.0", "7669")
+
+      // client
+      let client = TCPConnection.client(connect_auth, "127.0.0.1", "7669", "", env.out)
+      client.on_connected ({() =>client.send("Ping")})
+
+      client.on_received({(data: Array[U8] iso) =>
+        env.out.print(consume data)
+        client.send("Ping")})
+    end
+````
+```
+
