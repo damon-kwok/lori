@@ -24,8 +24,10 @@ actor Main
   new create(env: Env) =>
     try
       let auth = TCPListenAuth(env.root as AmbientAuth)
-      let server = TCPListener(auth, env.out)
-      server.listen("0.0.0.0", "7669")
+      let svr = TCPListener(auth, env.out)
+      svr.on(Received, {(conn: TCPConnection, data: Array[U8] iso) =>
+        conn.send(consume data) })
+      svr.listen("0.0.0.0", "7669")
     end
 ```
 
@@ -35,7 +37,8 @@ actor Main
   new create(env: Env) =>
     try
       let auth = TCPConnectAuth(env.root as AmbientAuth)
-      TCPConnection.client(auth, "0.0.0.0", "7669", "localhost", env.out)
+      let cli = TCPConnection(auth, "127.0.0.1", "7669", "localhost", env.out)
+      cli.on(Connected, {() =>cli.send("Ping")})
     end
 ```
 
@@ -49,17 +52,17 @@ actor Main
       let connect_auth = TCPConnectAuth(env.root as AmbientAuth)
 
       // server
-      let server = TCPListener(listen_auth, env.out)
-      server.on(Received, {(conn: TCPConnection, data: Array[U8] iso) =>
+      let svr = TCPListener(listen_auth, env.out)
+      svr.on(Received, {(conn: TCPConnection, data: Array[U8] iso) =>
         env.out.print(consume data)
         conn.send("Pong") })
-      server.listen("0.0.0.0", "7669")
+      svr.listen("0.0.0.0", "7669")
 
       // client
-      let client = TCPConnection.client(connect_auth, "127.0.0.1", "7669", "", env.out)
-      client.on(Connected, {() =>client.send("Ping")})
-      client.on(Received, {(data: Array[U8] iso) =>
+      let cli = TCPConnection(connect_auth, "127.0.0.1", "7669", "", env.out)
+      cli.on(Connected, {() =>cli.send("Ping")})
+      cli.on(Received, {(data: Array[U8] iso) =>
         env.out.print(consume data)
-        client.send("Ping") })
+        cli.send("Ping") })
     end
 ```
