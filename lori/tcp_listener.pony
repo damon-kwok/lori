@@ -43,6 +43,7 @@ actor TCPListener
     _on_listening = {()=> None }
 
   be listen(host: String val, port: String val) =>
+    if _state is Open then return end
     _host = host
     _port = port
     let event = PonyTCP.listen(this, _host, _port)
@@ -75,6 +76,10 @@ actor TCPListener
       return
     end
 
+    if AsioEvent.readable(flags) then
+      _accept(arg)
+    end
+    
     if AsioEvent.disposable(flags) then
       PonyAsio.destroy(_event)
       _event = AsioEvent.none()
