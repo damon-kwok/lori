@@ -11,33 +11,33 @@ actor TCPConnection
   var _read_buffer_size: USize = 16384
   var _expect: USize = 0
 
-  let _on_closed: {()} val
-  let _on_received: {(Array[U8] iso)} val
-  let _on_throttled: {()} val
-  let _on_unthrottled: {()} val
-  let _on_connected: {()} val
+  var _on_disconn: {()} val
+  var _on_data: {(Array[U8] iso)} val
+  var _on_throttled: {()} val
+  var _on_unthrottled: {()} val
+  var _on_conn: {()} val
 
-  new client(auth: TCPConnectorAuth,
+  new create(auth: TCPConnectorAuth,
     host: String,
     port: String,
     from: String,
     out : OutStream,
-    on_connected: (None | {()} val) =None,
-    on_closed: (None | {()} val) =None,
-    on_received: (None | {(Array[U8] iso)} val) =None,
+    on_conn: (None | {()} val) =None,
+    on_disconn: (None | {()} val) =None,
+    on_data: (None | {(Array[U8] iso)} val) =None,
     on_throttled: (None | {()} val) = None,
     on_unthrottled: (None | {()} val) =None)
   =>
     // TODO: handle happy eyeballs here - connect count
-    _on_closed = match on_closed
+    _on_disconn = match on_disconn
     | let fn: {()} val => fn
     else {()=> out.print("Connection Closed.") }
     end
-    _on_connected = match on_connected
+    _on_conn = match on_conn
     | let fn: {()} val => fn
     else {()=> out.print("We have a new connection!") }
     end
-    _on_received = match on_received
+    _on_data = match on_data
     | let fn: {(Array[U8] iso)} val => fn
     else {(data: Array[U8] iso)=> out.print("Data received. Echoing it back..") }
     end
@@ -52,21 +52,22 @@ actor TCPConnection
     PonyTCP.connect(this, host, port, from,
       AsioEvent.read_write_oneshot())
 
-  new accept(auth: TCPAcceptorAuth,
+  new _accept(auth: TCPAcceptorAuth,
     fd': U32,
     out : OutStream,
-    on_closed: (None | {()} val) = None,
-    on_received: (None | {(Array[U8] iso)} val) =None,
+    on_disconn: (None | {()} val) = None,
+    on_data: (None | {(Array[U8] iso)} val) =None,
     on_throttled: (None | {()} val) =None,
     on_unthrottled: (None | {()} val) = None)
   =>
     _fd = fd'
-    _on_closed = match on_closed
-    | let fn: {()} val => fn
-    else {()=> out.print("Connection Closed.") }
-    end
-    _on_connected = {()=> None }
-    _on_received = match on_received
+    // _on_disconn = match on_disconn
+    // | let fn: {()} val => fn
+    // else {()=> out.print("Connection Closed.") }
+    // end
+    _on_disconn = {()=> None }
+    _on_conn = {()=> None }
+    _on_data = match on_data
     | let fn: {(Array[U8] iso)} val => fn
     else {(data: Array[U8] iso)=> out.print("Data received. Echoing it back..") }
     end
@@ -82,15 +83,23 @@ actor TCPConnection
     _open()
 
   new none() =>
-    // """
-    // For initializing an empty variable
-    // """
-    // _enclosing = None
-    _on_closed = {()=> None }
-    _on_connected = {()=> None }
-    _on_received = {(data: Array[U8] iso)=> None }
+    """
+    For initializing an empty variable
+    """
+    _on_disconn = {()=> None }
+    _on_conn = {()=> None }
+    _on_data = {(data: Array[U8] iso)=> None }
     _on_throttled = {()=> None }
     _on_unthrottled = {()=> None }
+
+  be on(ev: TCPConnectEvent, f: ({()} val | {(Array[U8] iso)} val)) =>
+    match ev
+    | CONN => try _on_conn = (f as {()} val) end
+    | DISCONN => try _on_disconn = (f as {()} val) end
+    | DATA => try _on_data = (f as {(Array[U8] iso)} val) end 
+    | THROTTLED => try _on_throttled = (f as {()} val) end
+    | UNTHROTTLED => try _on_unthrottled = (f as {()} val) end
+    end
 
   fun ref expect(qty: USize) ? =>
     if qty <= _read_buffer_size then
@@ -213,7 +222,7 @@ actor TCPConnection
             (let data', _read_buffer) = (consume x).chop(bytes_to_consume)
             _bytes_in_read_buffer = _bytes_in_read_buffer - bytes_to_consume
 
-            _on_received(consume data')
+            _on_data(consume data')
           end
 
           if total_bytes_read >= _read_buffer_size then
@@ -293,7 +302,7 @@ actor TCPConnection
         _fd = PonyAsio.event_fd(event)
         _event = event
         _open()
-        _on_connected()
+        _on_conn()
         _read()
       end
     end
