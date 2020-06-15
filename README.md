@@ -39,11 +39,8 @@ actor Main
     end
 ```
 
-### PingPong
-
-``` pony
 ### Ping-Pong
-````pony
+```pony
 actor Main
   new create(env: Env) =>
     try
@@ -53,19 +50,16 @@ actor Main
 
       // server
       let server = TCPListener(listen_auth, env.out)
-      server.on_received({(conn: TCPConnection, data: Array[U8] iso) =>
-                      _out.print(consume data)
-                      _connection.send("Pong") })
+      server.on(Received, {(conn: TCPConnection, data: Array[U8] iso) =>
+        env.out.print(consume data)
+        conn.send("Pong") })
       server.listen("0.0.0.0", "7669")
 
       // client
       let client = TCPConnection.client(connect_auth, "127.0.0.1", "7669", "", env.out)
-      client.on_connected ({() =>client.send("Ping")})
-
-      client.on_received({(data: Array[U8] iso) =>
+      client.on(Connected, {() =>client.send("Ping")})
+      client.on(Received, {(data: Array[U8] iso) =>
         env.out.print(consume data)
-        client.send("Ping")})
+        client.send("Ping") })
     end
-````
 ```
-
