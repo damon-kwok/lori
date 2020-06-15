@@ -4,7 +4,7 @@ actor TCPConnection
   var _fd: U32 = -1
   var _event: AsioEventID = AsioEvent.none()
   var _state: U32 = 0
-  
+
   let _pending: List[(ByteSeq, USize)] = _pending.create()
   var _read_buffer: Array[U8] iso = recover Array[U8] end
   var _bytes_in_read_buffer: USize = 0
@@ -39,7 +39,7 @@ actor TCPConnection
     end
     _on_data = match on_data
     | let fn: {(Array[U8] iso)} val => fn
-    else {(data: Array[U8] iso)=> out.print("Data received. Echoing it back..") }
+    else {(data: Array[U8] iso)=> out.print("Data received. Echoing it back.") }
     end
     _on_throttled = match on_throttled
     | let fn: {()} val => fn
@@ -112,13 +112,15 @@ actor TCPConnection
     end
 
   fun ref _open() =>
-    // TODO: should this be private? I think so.
-    // I don't think the actor that is using the connection should
-    // ever need this.
-    // client-  open() gets called from our event_notify
-    // server- calls this
-    //
-    // seems like no need to call from external
+    """
+    TODO: should this be private? I think so.
+    I don't think the actor that is using the connection should
+    ever need this.
+    client-  open() gets called from our event_notify
+    server- calls this
+    
+    seems like no need to call from external
+    """
     _state = BitSet.set(_state, 0)
     writeable()
 
