@@ -17,9 +17,10 @@ actor Main
       .> listen("0.0.0.0", 7670)
 
       // client
-      let cli = TCPConnection(conn_auth, "127.0.0.1", 7670, "", env.out)
+      let cli = TCPConnection(conn_auth,  env.out)
       cli .> on(CONN, {() =>cli.send("Ping")})
           .> on(DATA, {(data: Array[U8] iso) =>
                env.out.print(consume data)
                cli.send("Ping") })
+          .> start("127.0.0.1", 7670, "")
     end

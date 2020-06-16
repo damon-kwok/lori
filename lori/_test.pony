@@ -76,7 +76,7 @@ class iso _PingPong is UnitTest
       let svr = TCPListener(svr_auth, h.env.out)
 
       let ping_auth = TCPConnectAuth(h.env.root as AmbientAuth)
-      var ping= TCPConnection(ping_auth, "127.0.0.1", 7671, "", h.env.out)
+      var ping= TCPConnection(ping_auth, h.env.out)
 
       let on_cli_data = {(d: Array[U8] iso)=>
         try
@@ -100,7 +100,7 @@ class iso _PingPong is UnitTest
         
       svr
       .> on(DATA, on_data)
-      .> on(START,{()=> ping.start() })
+      .> on(START,{()=> ping.start("127.0.0.1", 7671, "") })
       .> on(STOP,{()=> ping.dispose() })
       .> on(ERROR,{()=> h.fail("Unable to open _TestPongerListener") })
       .> on(CONN,{(c: TCPConnection)=> h.log("has new conn!!!")})
@@ -112,102 +112,6 @@ class iso _PingPong is UnitTest
 
     h.long_test(5_000_000_000)
 /*
-actor _TestPinger// is TCPClientActor
-  var _connection: TCPConnection = TCPConnection.none()
-  var _pings_to_send: I32
-  let _h: TestHelper
-
-  new create(auth: TCPConnectorAuth,
-    pings_to_send: I32,
-    h: TestHelper)
-  =>
-    _pings_to_send = pings_to_send
-    _h = h
-    _connection = TCPConnection.client(auth, "127.0.0.1", "7669", "", this)
-
-
-  fun ref connection(): TCPConnection =>
-    _connection
-
-  fun ref on_connected() =>
-    if _pings_to_send > 0 then
-      _connection.send("Ping")
-      _pings_to_send = _pings_to_send - 1
-    end
-
-  fun ref on_received(data: Array[U8] iso) =>
-    if _pings_to_send > 0 then
-      _connection.send("Ping")
-      _pings_to_send = _pings_to_send - 1
-    elseif _pings_to_send == 0 then
-      _h.complete(true)
-    else
-      _h.fail("Too many pongs received")
-    end
-
-actor _TestPonger// is TCPConnectionActor
-  var _connection: TCPConnection = TCPConnection.none()
-  var _pings_to_receive: I32
-  let _h: TestHelper
-
-  new create(auth: TCPAcceptorAuth,
-    fd: U32,
-    pings_to_receive: I32,
-    h: TestHelper)
-  =>
-    _pings_to_receive = pings_to_receive
-    _h = h
-    _connection = TCPConnection.server(auth, fd, this)
-
-  fun ref connection(): TCPConnection =>
-    _connection
-
-  fun ref on_received(data: Array[U8] iso) =>
-    if _pings_to_receive > 0 then
-      _connection.send("Pong")
-      _pings_to_receive = _pings_to_receive - 1
-    elseif _pings_to_receive == 0 then
-      _connection.send("Pong")
-    else
-      _h.fail("Too many pings received")
-    end
-
-actor _TestPongerListener// is TCPListenerActor
-  var _listener: TCPListener = TCPListener.none()
-  var _pings_to_receive: I32
-  let _h: TestHelper
-  var _pinger: (_TestPinger | None) = None
-  let _server_auth: TCPListenAuth
-
-  new create(listener_auth: TCPListenerAuth,
-    pings_to_receive: I32,
-    h: TestHelper)
-  =>
-    _pings_to_receive = pings_to_receive
-    _h = h
-    _server_auth = TCPListenAuth(listener_auth)
-    _listener = TCPListener(listener_auth, "127.0.0.1", "7669", this)
-
-  fun ref listener(): TCPListener =>
-    _listener
-
-  fun ref on_accept(fd: U32): _TestPonger =>
-    _TestPonger(_server_auth, fd, _pings_to_receive, _h)
-
-  fun ref on_closed() =>
-    try
-      (_pinger as _TestPinger).dispose()
-    end
-
-  fun ref on_listening() =>
-    try
-      let auth = TCPConnectAuth(_h.env.root as AmbientAuth)
-      _pinger = _TestPinger(auth, _pings_to_receive, _h)
-    end
-
-  fun ref on_failure() =>
-    _h.fail("Unable to open _TestPongerListener")
-
 class iso _TestBasicExpect is UnitTest
   fun name(): String => "TestBasicExpect"
 
