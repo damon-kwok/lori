@@ -29,9 +29,6 @@ actor TCPConnection
     on_unthrottled: (None | {()} val) =None)
   =>
     // TODO: handle happy eyeballs here - connect count
-    // _host = host
-    // _port = port
-    // _from = from
     _on_conn = match on_conn
     | let fn: {()} val => fn
     else {()=> out.print("Connection!") }
@@ -52,8 +49,6 @@ actor TCPConnection
     | let fn: {()} val => fn
     else {()=> out.print("Unthrottled!") }
     end
-    // PonyTCP.connect(this, host, port.string(), from,
-      // AsioEvent.read_write_oneshot())
 
   new _accept(listen: TCPListener,
     // auth: TCPAcceptorAuth,
