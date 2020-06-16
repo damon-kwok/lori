@@ -18,14 +18,11 @@ primitive TCPAcceptAuth
   new create(from: (AmbientAuth | NetAuth | TCPAuth | TCPListenAuth)) =>
     None
 
+// Listener
 type TCPListenerAuth is (AmbientAuth | NetAuth | TCPAuth | TCPListenAuth)
 
-type TCPConnectorAuth is (AmbientAuth |
-  NetAuth |
-  TCPAuth |
-  TCPConnectAuth)
+// Outgoing
+type TCPConnectorAuth is (AmbientAuth | NetAuth | TCPAuth | TCPConnectAuth)
 
-type TCPAcceptorAuth is (AmbientAuth |
-  NetAuth |
-  TCPAuth |
-  TCPAcceptAuth)
+// Incoming
+type TCPAcceptorAuth is (AmbientAuth | NetAuth | TCPAuth | TCPAcceptAuth)

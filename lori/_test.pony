@@ -1,6 +1,5 @@
 use "ponytest"
 
-
 actor Main is TestList
   new create(env: Env) =>
     PonyTest(env, this)
@@ -11,7 +10,7 @@ actor Main is TestList
   fun tag tests(test: PonyTest) =>
     test(_BitSet)
     // test(_TCPConnectionState)
-    // test(_PingPong)
+    test(_PingPong)
     // test(_TestBasicExpect)
 
 class iso _BitSet is UnitTest
@@ -34,34 +33,35 @@ class iso _BitSet is UnitTest
     x = BitSet.unset(x, 0)
     h.assert_false(BitSet.is_set(x, 0))
     h.assert_true(BitSet.is_set(x, 1))
-/*
+
 class iso _TCPConnectionState is UnitTest
   """
   Test that connection state works correctly
   """
   fun name(): String => "ConnectionState"
 
-  fun apply(h: TestHelper) =>
+  fun tag apply(h: TestHelper) =>
     // TODO: turn this into several different tests
     let a = TCPConnection.none()
 
-    h.assert_false(a.is_open())
-    a.open()
-    h.assert_true(a.is_open())
-    a.close()
-    h.assert_true(a.is_closed())
-    a.open()
-    h.assert_true(a.is_open())
-    h.assert_true(a.is_writeable())
-    h.assert_true(a.is_open())
-    a.throttled()
-    h.assert_true(a.is_throttled())
-    h.assert_false(a.is_writeable())
-    h.assert_true(a.is_open())
-    a.writeable()
-    h.assert_true(a.is_writeable())
-    a.writeable()
-    h.assert_true(a.is_writeable())
+    // a.is_open()
+    // h.assert_false(a.is_open())
+    // a.open()
+    // h.assert_true(a.is_open())
+    // a.close()
+    // h.assert_true(a.is_closed())
+    // a.open()
+    // h.assert_true(a.is_open())
+    // h.assert_true(a.is_writeable())
+    // h.assert_true(a.is_open())
+    // a.throttled()
+    // h.assert_true(a.is_throttled())
+    // h.assert_false(a.is_writeable())
+    // h.assert_true(a.is_open())
+    // a.writeable()
+    // h.assert_true(a.is_writeable())
+    // a.writeable()
+    // h.assert_true(a.is_writeable())
 
 class iso _PingPong is UnitTest
   """
@@ -70,22 +70,64 @@ class iso _PingPong is UnitTest
   fun name(): String => "PingPong"
 
   fun apply(h: TestHelper) =>
-    let pings_to_send: I32 = 100
-
+    h.log("test==ping-pong>")
     try
       let auth = TCPListenAuth(h.env.root as AmbientAuth)
-      let listener = _TestPongerListener(auth, pings_to_send, h)
-      h.dispose_when_done(listener)
+      let svr = TCPListener(auth, h.env.out)
+
+      let cli_auth = TCPConnectAuth(h.env.root as AmbientAuth)
+      var ping= TCPConnection(cli_auth, "127.0.0.1", 7669, "", h.env.out)
+
+      let on_cli_data =
+        {(d: Array[U8] iso)=>
+          try
+          let str = String.from_array(consume d)
+           h.log("+++++ping-data:"+ str)
+          let n = str.read_int[I32]()?._1 +1
+          if n < 10 then ping.send(n.string()) end
+          end}val
+            
+      ping
+      .> on(CONN,{()=> h.log("+++++ping-start");ping.send("0")})
+      .> on(DATA, on_cli_data)
+      
+      // let on_data2 = object val
+        // fun val apply(c: TCPConnection, d: Array[U8] iso) =>
+          // try
+          // let str = String.from_array(consume d)
+          // let n = str.read_int[I32]()?._1
+          // if n < I32(100) then ping.send("Ping") end
+          // end
+      // end
+
+      let on_data = {(c: TCPConnection, d: Array[U8] iso) =>
+      try
+          let str = String.from_array(consume d)
+          let n = str.read_int[I32]()?._1
+          h.log("n:"+n.string())
+          if n < 10 then ping.send(n.string()) end end} val
+      svr
+      .> on(DATA, on_data)
+      .> on(START,{()=> ping.start()  })
+      .> on(STOP,{()=> ping.dispose();svr.dispose() })
+      .> on(ERROR,{()=> h.fail("Unable to open _TestPongerListener") })
+      .> on(CONN,{(c: TCPConnection)=> h.log("has new conn!!!")})
+      .> on(DISCONN,{(c: TCPConnection)=> c.dispose() })
+      .> listen("127.0.0.1", 7669)
+      
+      h.dispose_when_done(svr)
     end
 
-    h.long_test(5_000_000_000)
+      
 
-actor _TestPinger is TCPClientActor
+    h.long_test(5_000_000_000)
+/*
+actor _TestPinger// is TCPClientActor
   var _connection: TCPConnection = TCPConnection.none()
   var _pings_to_send: I32
   let _h: TestHelper
 
-  new create(auth: OutgoingTCPAuth,
+  new create(auth: TCPConnectorAuth,
     pings_to_send: I32,
     h: TestHelper)
   =>
@@ -113,12 +155,12 @@ actor _TestPinger is TCPClientActor
       _h.fail("Too many pongs received")
     end
 
-actor _TestPonger is TCPConnectionActor
+actor _TestPonger// is TCPConnectionActor
   var _connection: TCPConnection = TCPConnection.none()
   var _pings_to_receive: I32
   let _h: TestHelper
 
-  new create(auth: IncomingTCPAuth,
+  new create(auth: TCPAcceptorAuth,
     fd: U32,
     pings_to_receive: I32,
     h: TestHelper)
@@ -140,12 +182,12 @@ actor _TestPonger is TCPConnectionActor
       _h.fail("Too many pings received")
     end
 
-actor _TestPongerListener is TCPListenerActor
+actor _TestPongerListener// is TCPListenerActor
   var _listener: TCPListener = TCPListener.none()
   var _pings_to_receive: I32
   let _h: TestHelper
   var _pinger: (_TestPinger | None) = None
-  let _server_auth: TCPServerAuth
+  let _server_auth: TCPListenAuth
 
   new create(listener_auth: TCPListenerAuth,
     pings_to_receive: I32,
@@ -153,7 +195,7 @@ actor _TestPongerListener is TCPListenerActor
   =>
     _pings_to_receive = pings_to_receive
     _h = h
-    _server_auth = TCPServerAuth(listener_auth)
+    _server_auth = TCPListenAuth(listener_auth)
     _listener = TCPListener(listener_auth, "127.0.0.1", "7669", this)
 
   fun ref listener(): TCPListener =>
@@ -196,11 +238,11 @@ class iso _TestBasicExpect is UnitTest
 
     h.long_test(2_000_000_000)
 
-actor _TestBasicExpectClient is TCPClientActor
+actor _TestBasicExpectClient// is TCPClientActor
   var _connection: TCPConnection = TCPConnection.none()
   let _h: TestHelper
 
-  new create(auth: OutgoingTCPAuth, h: TestHelper) =>
+  new create(auth: TCPConnectorAuth, h: TestHelper) =>
     _h = h
     _connection = TCPConnection.client(auth, "127.0.0.1", "7670", "", this)
 
@@ -213,11 +255,10 @@ actor _TestBasicExpectClient is TCPClientActor
 
   fun ref on_received(data: Array[U8] iso) =>
     _h.fail("Client shouldn't get data")
-
-actor _TestBasicExpectListener is TCPListenerActor
+actor _TestBasicExpectListener// is TCPListenerActor
   let _h: TestHelper
   var _listener: TCPListener = TCPListener.none()
-  let _server_auth: TCPServerAuth
+  let _server_auth: TCPListenAuth
   let _client_auth: TCPConnectAuth
   var _client: (_TestBasicExpectClient | None) = None
 
@@ -227,7 +268,7 @@ actor _TestBasicExpectListener is TCPListenerActor
   =>
     _h = h
     _client_auth = client_auth
-    _server_auth = TCPServerAuth(listener_auth)
+    _server_auth = TCPListenAuth(listener_auth)
     _listener = TCPListener(listener_auth, "127.0.0.1", "7670", this)
 
   fun ref listener(): TCPListener =>
@@ -246,12 +287,12 @@ actor _TestBasicExpectListener is TCPListenerActor
   fun ref on_failure() =>
     _h.fail("Unable to open _TestBasicExpectListener")
 
-actor _TestBasicExpectServer is TCPServerActor
+actor _TestBasicExpectServer// is TCPServerActor
   let _h: TestHelper
   var _connection: TCPConnection = TCPConnection.none()
   var _received_count: U8 = 0
 
-  new create(auth: IncomingTCPAuth, fd: U32, h: TestHelper) =>
+  new create(auth: TCPAcceptorAuth, fd: U32, h: TestHelper) =>
     _h = h
     _connection = TCPConnection.server(auth, fd, this)
     try _connection.expect(4)? end

@@ -24,10 +24,9 @@ actor Main
   new create(env: Env) =>
     try
       let auth = TCPListenAuth(env.root as AmbientAuth)
-      let svr = TCPListener(auth, env.out)
-      svr.on(Received, {(conn: TCPConnection, data: Array[U8] iso) =>
-        conn.send(consume data) })
-      svr.listen("0.0.0.0", "7669")
+      TCPListener(auth, env.out)
+      .> on(DATA, {(c: TCPConnection, d: Array[U8] iso) => c.send(consume d) })
+      .> listen("0.0.0.0", 7669)
     end
 ```
 
@@ -37,8 +36,9 @@ actor Main
   new create(env: Env) =>
     try
       let auth = TCPConnectAuth(env.root as AmbientAuth)
-      let cli = TCPConnection(auth, "127.0.0.1", "7669", "localhost", env.out)
-      cli.on(Connected, {() =>cli.send("Ping")})
+      let cli = TCPConnection(auth, "127.0.0.1", 7669, "localhost", env.out)
+      cli .> on(CONN, {() =>cli.send("Hello!")})
+          .> on(DATA, {(d: Array[U8] iso) => env.out.print(consume d) })
     end
 ```
 
