@@ -2,6 +2,9 @@ use "collections"
 
 actor TCPConnection
   var _fd: U32 = -1
+  var _host: String =""
+  var _port: U32 = 0
+  var _from: String = ""
   var _event: AsioEventID = AsioEvent.none()
   var _state: U32 = 0
 
@@ -29,6 +32,9 @@ actor TCPConnection
     on_unthrottled: (None | {()} val) =None)
   =>
     // TODO: handle happy eyeballs here - connect count
+    _host = host
+    _port = port
+    _from = from
     _on_conn = match on_conn
     | let fn: {()} val => fn
     else {()=> out.print("Connection!") }
@@ -49,8 +55,8 @@ actor TCPConnection
     | let fn: {()} val => fn
     else {()=> out.print("Unthrottled!") }
     end
-    PonyTCP.connect(this, host, port.string(), from,
-      AsioEvent.read_write_oneshot())
+    // PonyTCP.connect(this, host, port.string(), from,
+      // AsioEvent.read_write_oneshot())
 
   new _accept(listen: TCPListener,
     // auth: TCPAcceptorAuth,
@@ -63,8 +69,8 @@ actor TCPConnection
     _on_data = {(data: Array[U8] iso)=> listen._accept_on_data(self, consume data) }
     _on_throttled = {()=> None }
     _on_unthrottled = {()=> None }
-    // _event = PonyAsio.create_event(this, _fd)
-    // _open()
+    _event = PonyAsio.create_event(this, _fd)
+    _open()
 
   new none() =>
     """
@@ -78,8 +84,8 @@ actor TCPConnection
 
   be start()=>
     if is_closed() then
-      _event = PonyAsio.create_event(this, _fd)
-      _open()
+      PonyTCP.connect(this, _host, _port.string(), _from,
+      AsioEvent.read_write_oneshot())
     end
 
   be on(ev: TCPConnectEvent, f: ({()} val | {(Array[U8] iso)} val)) =>

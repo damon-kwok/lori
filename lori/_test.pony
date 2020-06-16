@@ -72,53 +72,43 @@ class iso _PingPong is UnitTest
   fun apply(h: TestHelper) =>
     h.log("test==ping-pong>")
     try
-      let auth = TCPListenAuth(h.env.root as AmbientAuth)
-      let svr = TCPListener(auth, h.env.out)
+      let svr_auth = TCPListenAuth(h.env.root as AmbientAuth)
+      let svr = TCPListener(svr_auth, h.env.out)
 
-      let cli_auth = TCPConnectAuth(h.env.root as AmbientAuth)
-      var ping= TCPConnection(cli_auth, "127.0.0.1", 7669, "", h.env.out)
+      let ping_auth = TCPConnectAuth(h.env.root as AmbientAuth)
+      var ping= TCPConnection(ping_auth, "127.0.0.1", 7671, "", h.env.out)
 
-      let on_cli_data =
-        {(d: Array[U8] iso)=>
-          try
-          let str = String.from_array(consume d)
-           h.log("+++++ping-data:"+ str)
-          let n = str.read_int[I32]()?._1 +1
-          if n < 10 then ping.send(n.string()) end
-          end}val
-            
-      ping
-      .> on(CONN,{()=> h.log("+++++ping-start");ping.send("0")})
-      .> on(DATA, on_cli_data)
-      
-      // let on_data2 = object val
-        // fun val apply(c: TCPConnection, d: Array[U8] iso) =>
-          // try
-          // let str = String.from_array(consume d)
-          // let n = str.read_int[I32]()?._1
-          // if n < I32(100) then ping.send("Ping") end
-          // end
-      // end
-
-      let on_data = {(c: TCPConnection, d: Array[U8] iso) =>
-      try
+      let on_cli_data = {(d: Array[U8] iso)=>
+        try
           let str = String.from_array(consume d)
           let n = str.read_int[I32]()?._1
-          h.log("n:"+n.string())
-          if n < 10 then ping.send(n.string()) end end} val
+          if n < 10 then ping.send((n+1).string()) else h.complete(true) end
+        end
+        }val
+            
+      ping
+      .> on(CONN,{()=> h.log("ping-start");ping.send("0")})
+      .> on(DATA, on_cli_data)
+
+      let on_data = {(c: TCPConnection, d: Array[U8] iso) =>
+        try
+          let str = String.from_array(consume d)
+          let n = str.read_int[I32]()?._1 + 1
+          if n < 10 then ping.send(n.string()) else h.complete(true) end
+        end
+        } val
+        
       svr
       .> on(DATA, on_data)
-      .> on(START,{()=> ping.start()  })
-      .> on(STOP,{()=> ping.dispose();svr.dispose() })
+      .> on(START,{()=> ping.start() })
+      .> on(STOP,{()=> ping.dispose() })
       .> on(ERROR,{()=> h.fail("Unable to open _TestPongerListener") })
       .> on(CONN,{(c: TCPConnection)=> h.log("has new conn!!!")})
       .> on(DISCONN,{(c: TCPConnection)=> c.dispose() })
-      .> listen("127.0.0.1", 7669)
+      .> listen("0.0.0.0", 7671)
       
       h.dispose_when_done(svr)
     end
-
-      
 
     h.long_test(5_000_000_000)
 /*
