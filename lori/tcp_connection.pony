@@ -15,6 +15,7 @@ class TCPConnection
   var host: String =""
   var port: String =""
   var from: String =""
+  let _out: (OutStream | None)
   var _event: AsioEventID = AsioEvent.none()
   var _state: U32 = 0
   var _enclosing: (TCPClientActor ref | TCPAcceptorActor ref | None) = None
@@ -27,21 +28,30 @@ class TCPConnection
   new client(auth: OutgoingTCPAuth,
     host': String,
     port': String,
-    from': String)
+    from': String,
+    out': (OutStream | None))
   =>
     host = host'
     port = port'
     from = from'
+    _out = out'
 
   new accept(auth: IncomingTCPAuth, fd': U32)
   =>
     fd = fd'
+    _out = None
 
   new none() =>
     """
     For initializing an empty variable
     """
+    _out = None
     None
+
+  fun log(data: (String val | Array[U8 val] val))=>
+    match _out
+    | let out: OutStream => out.print(data)
+    end
 
   fun ref start(enclosing: (TCPClientActor ref | TCPAcceptorActor ref | None))
   =>

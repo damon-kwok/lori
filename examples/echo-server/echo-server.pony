@@ -1,19 +1,5 @@
 use "../../lori"
 
-
-/*
-interface tag Createable
-  new tag create()
-
-actor Act is Createable
-  new create() =>None
-    
-primitive Lis[A: Createable tag = Act]
-  fun listen(port:U32):(U32, A) =>
-    let a = A
-    (port, a)
-*/
-
 actor Main
   new create(env: Env) =>
     TCPServer[EchoServer].listen("0.0.0.0", 7669, env)
@@ -35,15 +21,15 @@ actor EchoServer is TCPListenerActor
       Echoer(recover TCPConnection.none() end)
     end
 
-  fun ref on_closed() => None
-    // _listener.out.print("Echo server shut down.")
+  fun ref on_closed() =>
+    _listener.log("Echo server shut down.")
 
-  fun ref on_failure() => None
-    // _listener.out.print("Couldn't start Echo server. " +
-      // "Perhaps try another network interface?")
+  fun ref on_failure() =>
+    _listener.log("Couldn't start Echo server. " +
+      "Perhaps try another network interface?")
 
-  fun ref on_listening() => None
-    // _listener.out.print("Echo server started.")
+  fun ref on_listening() =>
+    _listener.log("Echo server started.")
 
 actor Echoer is TCPAcceptorActor
   var _connection: TCPConnection = TCPConnection.none()
@@ -56,12 +42,12 @@ actor Echoer is TCPAcceptorActor
   fun ref connection(): TCPConnection =>
     _connection
 
-  fun ref on_closed() => None
-    // _out.print("Connection Closed")
+  fun ref on_closed() =>
+    _connection.log("Connection Closed")
 
-  fun ref on_connected(conn: TCPConnection ref) => None
-    // _out.print("We have a new connection!")
+  fun ref on_connected(conn: TCPConnection ref) =>
+    _connection.log("We have a new connection!")
 
   fun ref on_received(data: Array[U8] iso) =>
-    // _out.print("Data received. Echoing it back.")
+    _connection.log("Data received. Echoing it back.")
     _connection.send(consume data)

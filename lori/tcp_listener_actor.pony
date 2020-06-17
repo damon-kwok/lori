@@ -1,5 +1,7 @@
 interface tag TCPListenerActor//[A: TCPAcceptorActor]
   new tag create(a: TCPListener iso)
+    
+  // fun ref bind(a: TCPListener iso)
 
   fun ref listener(): TCPListener
 
@@ -7,16 +9,6 @@ interface tag TCPListenerActor//[A: TCPAcceptorActor]
     """
     Called when a connection is accepted
     """
-    /*
-    recover
-    let c = A
-    // var o:TCPConnection iso = recover TCPConnection.none() end
-    // c.bind(consume o)
-    // let auth = TCPAcceptAuth(listener().auth)
-    // c.bind(recover TCPConnection.accept(auth, fd, c) end)
-    c.bind(recover TCPConnection.none() end)
-    c
-    end*/
 
   fun ref on_closed() =>
     """

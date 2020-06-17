@@ -26,12 +26,36 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
+primitive TCPServer[A: TCPListenerActor =TCPSimpleListenActor]
+  """
+  TCPServer
+  """
+  fun listen(host: String, port: U32, env: Env) =>
+    try
+      let auth = TCPListenAuth(env.root as AmbientAuth)
+      A(recover TCPListener(auth, host, port.string(), env.out) end)
+    end
 
+primitive TCPClient[A: TCPConnectionActor =TCPSimpleClientActor]
+  """
+  TCPClient
+  """
+  fun connect(host: String, port: U32, env: Env) =>
+    try
+      let auth = TCPConnectAuth(env.root as AmbientAuth)
+      A(recover TCPConnection.client(auth, host, port.string(), "", env.out) end)
+    end
+
+// TCPSimpleListenActor
 actor TCPSimpleListenActor is TCPListenerActor
   var _listen:TCPListener = TCPListener.none()
-  new create(a: TCPListener iso) => None
+
+  new create(listen: TCPListener iso) => _listen = consume listen
+
   be bind(listen: TCPListener iso) => _listen = consume listen
+
   fun ref listener(): TCPListener => _listen
+
   fun ref on_accept(fd: U32): TCPConnectionActor =>
     try
       let auth = TCPAcceptAuth(listener().auth as TCPListenerAuth)
@@ -40,26 +64,24 @@ actor TCPSimpleListenActor is TCPListenerActor
       TCPSimpleAcceptActor(recover TCPConnection.none() end)
     end
 
+// TCPSimpleClientActor
 actor TCPSimpleClientActor is TCPClientActor
   var _conn: TCPConnection = TCPConnection.none()
+
   new create(conn: TCPConnection iso) => _conn = consume conn
+
+  fun ref bind(conn: TCPConnection iso) => _conn = consume conn
+
   fun ref connection(): TCPConnection => _conn
 
+// TCPSimpleAcceptActor
 actor TCPSimpleAcceptActor is TCPAcceptorActor
-  var _conn: TCPConnection = TCPConnection.none() 
+  var _conn: TCPConnection = TCPConnection.none()
+
   new create(conn: TCPConnection iso) => _conn = consume conn
+
+  fun ref bind(conn: TCPConnection iso) => _conn = consume conn
+
   fun ref connection(): TCPConnection => _conn
 
-primitive TCPServer[A: TCPListenerActor =TCPSimpleListenActor]
-  fun listen(host: String, port: U32, env: Env) =>
-    try
-      let auth = TCPListenAuth(env.root as AmbientAuth)
-      A(recover TCPListener(auth, host, port.string()) end)
-    end
 
-primitive TCPClient[A: TCPConnectionActor =TCPSimpleClientActor]
-  fun connect(host: String, port: U32, env: Env) =>
-    try
-      let auth = TCPConnectAuth(env.root as AmbientAuth)
-      A(recover TCPConnection.client(auth, host, port.string(), "") end)
-    end
