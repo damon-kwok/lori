@@ -1,16 +1,23 @@
 type TCPListenerAuth is (AmbientAuth | NetAuth | TCPAuth | TCPListenAuth)
 
-class TCPListener
+class TCPListener//[A: TCPAcceptorActor]
+  var auth: (TCPListenerAuth | None) = None
   let host: String
   let port: String
+  // let out: OutStream
   var _event: AsioEventID = AsioEvent.none()
   var _fd: U32 = -1
   var state: TCPConnectionState = Closed
-  var _enclosing: (TCPListenerActor ref | None)
+  var _enclosing: (TCPListenerActor ref | None) = None
 
-  new create(auth: TCPListenerAuth, host': String, port': String, enclosing: TCPListenerActor ref) =>
+  new create(auth': TCPListenerAuth, host': String, port': String) =>
+    auth = auth'
     host = host'
     port = port'
+    // out = out'
+
+  fun ref listen(enclosing: TCPListenerActor ref) =>
+    if state is Open then return end
     _enclosing = enclosing
     let event = PonyTCP.listen(enclosing, host, port)
     if not event.is_null() then
@@ -20,9 +27,26 @@ class TCPListener
       enclosing.on_listening()
     else
       enclosing.on_failure()
-    end
+      end
 
-  new none() =>
+  
+  // fun ref _on_accept(fd: U32): TCPConnectionActor =>
+    // """
+    // Called when a connection is accepted
+    // """
+    // recover
+    // let c = A
+    // match auth
+    // | let auth':TCPListenerAuth => 
+      // let accept_auth = TCPAcceptAuth(auth')
+      // c.bind(recover TCPConnection.accept(accept_auth, fd, c) end)
+    // end
+    // c
+    // end
+
+  new none(/*auth': TCPListenerAuth, out': OutStream*/) =>
+    // auth = auth'
+    // out = out'
     host = ""
     port = ""
     _enclosing = None

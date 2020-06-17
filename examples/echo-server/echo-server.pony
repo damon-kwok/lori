@@ -1,59 +1,67 @@
 use "../../lori"
 
+
+/*
+interface tag Createable
+  new tag create()
+
+actor Act is Createable
+  new create() =>None
+    
+primitive Lis[A: Createable tag = Act]
+  fun listen(port:U32):(U32, A) =>
+    let a = A
+    (port, a)
+*/
+
 actor Main
   new create(env: Env) =>
-    try
-      let auth = TCPListenAuth(env.root as AmbientAuth)
-      let echo = EchoServer(auth, "", "7669", env.out)
-    end
+    TCPServer[EchoServer].listen("0.0.0.0", 7669, env)
 
 actor EchoServer is TCPListenerActor
-  var _listener: TCPListener = TCPListener.none()
-  let _out: OutStream
-  let _server_auth: TCPServerAuth
-
-  new create(listen_auth: TCPListenAuth,
-    host: String,
-    port: String,
-    out: OutStream)
-  =>
-    _out = out
-    _server_auth = TCPServerAuth(listen_auth)
-    _listener = TCPListener(listen_auth, host, port, this)
-
+  var _listener: TCPListener  = TCPListener.none()
+  new create(a: TCPListener iso)=>
+    _listener = consume a
+    _listener.listen(this)
+    
   fun ref listener(): TCPListener =>
     _listener
 
   fun ref on_accept(fd: U32): TCPConnectionActor =>
-    Echoer(_server_auth, fd, _out)
+    try
+      let auth = TCPAcceptAuth(listener().auth as TCPListenerAuth)
+      Echoer(recover TCPConnection.accept(auth, fd) end)
+    else
+      Echoer(recover TCPConnection.none() end)
+    end
 
-  fun ref on_closed() =>
-    _out.print("Echo server shut down.")
+  fun ref on_closed() => None
+    // _listener.out.print("Echo server shut down.")
 
-  fun ref on_failure() =>
-    _out.print("Couldn't start Echo server. " +
-      "Perhaps try another network interface?")
+  fun ref on_failure() => None
+    // _listener.out.print("Couldn't start Echo server. " +
+      // "Perhaps try another network interface?")
 
-  fun ref on_listening() =>
-    _out.print("Echo server started.")
+  fun ref on_listening() => None
+    // _listener.out.print("Echo server started.")
 
-actor Echoer is TCPConnectionActor
+actor Echoer is TCPAcceptorActor
   var _connection: TCPConnection = TCPConnection.none()
-  let _out: OutStream
+    
+  new create(conn: TCPConnection iso)=>
+    _connection = consume conn
 
-  new create(auth: IncomingTCPAuth, fd: U32, out: OutStream) =>
-    _out = out
-    _connection = TCPConnection.server(auth, fd, this)
+  be bind(conn: TCPConnection iso) => _connection = consume conn
 
   fun ref connection(): TCPConnection =>
     _connection
 
-  fun ref on_closed() =>
-    _out.print("Connection Closed")
+  fun ref on_closed() => None
+    // _out.print("Connection Closed")
 
-  fun ref on_connected(conn: TCPConnection ref) =>
-    _out.print("We have a new connection!")
+  fun ref on_connected(conn: TCPConnection ref) => None
+    // _out.print("We have a new connection!")
 
   fun ref on_received(data: Array[U8] iso) =>
-    _out.print("Data received. Echoing it back.")
+    // _out.print("Data received. Echoing it back.")
     _connection.send(consume data)

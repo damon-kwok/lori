@@ -5,9 +5,13 @@ interface tag TCPClientActor is TCPConnectionActor
     """
     None
 
-interface tag TCPServerActor is TCPConnectionActor
+interface tag TCPAcceptorActor is TCPConnectionActor
 
 interface tag TCPConnectionActor
+  new tag create(conn: TCPConnection iso)
+
+  // be bind(conn: TCPConnection iso)
+    
   fun ref connection(): TCPConnection
 
   fun ref on_closed() =>

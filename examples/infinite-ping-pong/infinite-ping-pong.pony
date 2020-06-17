@@ -3,18 +3,18 @@ use "../../lori"
 // test app to drive the library
 
 actor Main
-  new create(env: Env) =>
-    try
-      let listen_auth = TCPListenAuth(env.root as AmbientAuth)
-      let connect_auth = TCPConnectAuth(env.root as AmbientAuth)
-      Listener(listen_auth, connect_auth, env.out)
-    end
-
+  new create(env: Env) =>None
+    // try
+      // let listen_auth = TCPListenAuth(env.root as AmbientAuth)
+      // let connect_auth = TCPConnectAuth(env.root as AmbientAuth)
+      // Listener(listen_auth, connect_auth, env.out)
+    // end
+/*
 actor  Listener is TCPListenerActor
   var _listener: TCPListener = TCPListener.none()
   let _out: OutStream
   let _connect_auth: OutgoingTCPAuth
-  let _server_auth: TCPServerAuth
+  let _accept_auth: TCPAcceptAuth
 
   new create(listen_auth: TCPListenAuth,
     connect_auth: OutgoingTCPAuth,
@@ -22,14 +22,14 @@ actor  Listener is TCPListenerActor
   =>
     _connect_auth = connect_auth
     _out = out
-    _server_auth = TCPServerAuth(listen_auth)
+    _accept_auth = TCPAcceptAuth(listen_auth)
     _listener = TCPListener(listen_auth, "127.0.0.1", "7669", this)
 
   fun ref listener(): TCPListener =>
     _listener
 
   fun ref on_accept(fd: U32): Server =>
-    Server(_server_auth, fd, _out)
+    Server(_accept_auth, fd, _out)
 
   fun ref on_listening() =>
     Client(_connect_auth, "127.0.0.1", "7669", "", _out)
@@ -37,13 +37,13 @@ actor  Listener is TCPListenerActor
   fun ref on_failure() =>
     _out.print("Unable to open listener")
 
-actor Server is TCPServerActor
+actor Server is TCPAcceptorActor
   var _connection: TCPConnection = TCPConnection.none()
   let _out: OutStream
 
   new create(auth: IncomingTCPAuth, fd: U32, out: OutStream) =>
     _out = out
-    _connection =  TCPConnection.server(auth, fd, this)
+    _connection =  TCPConnection.accept(auth, fd, this)
 
   fun ref connection(): TCPConnection =>
     _connection
@@ -74,3 +74,4 @@ actor Client is TCPClientActor
   fun ref on_received(data: Array[U8] iso) =>
    _out.print(consume data)
    _connection.send("Ping")
+*/

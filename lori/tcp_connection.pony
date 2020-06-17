@@ -8,13 +8,16 @@ type OutgoingTCPAuth is (AmbientAuth |
 type IncomingTCPAuth is (AmbientAuth |
   NetAuth |
   TCPAuth |
-  TCPServerAuth)
+  TCPAcceptAuth)
 
 class TCPConnection
   var fd: U32 = -1
+  var host: String =""
+  var port: String =""
+  var from: String =""
   var _event: AsioEventID = AsioEvent.none()
   var _state: U32 = 0
-  let _enclosing: (TCPClientActor ref | TCPServerActor ref | None)
+  var _enclosing: (TCPClientActor ref | TCPAcceptorActor ref | None) = None
   let _pending: List[(ByteSeq, USize)] = _pending.create()
   var _read_buffer: Array[U8] iso = recover Array[U8] end
   var _bytes_in_read_buffer: USize = 0
@@ -22,30 +25,36 @@ class TCPConnection
   var _expect: USize = 0
 
   new client(auth: OutgoingTCPAuth,
-    host: String,
-    port: String,
-    from: String,
-    enclosing: TCPClientActor ref)
+    host': String,
+    port': String,
+    from': String)
   =>
-    // TODO: handle happy eyeballs here - connect count
-    _enclosing = enclosing
-    PonyTCP.connect(enclosing, host, port, from,
-      AsioEvent.read_write_oneshot())
+    host = host'
+    port = port'
+    from = from'
 
-  new server(auth: IncomingTCPAuth,
-    fd': U32,
-    enclosing: TCPServerActor ref)
+  new accept(auth: IncomingTCPAuth, fd': U32)
   =>
     fd = fd'
-    _enclosing = enclosing
-    _event = PonyAsio.create_event(enclosing, fd)
-    open()
 
   new none() =>
     """
     For initializing an empty variable
     """
-    _enclosing = None
+    None
+
+  fun ref start(enclosing: (TCPClientActor ref | TCPAcceptorActor ref | None))
+  =>
+    _enclosing = enclosing
+    
+    match enclosing
+    | let the_actor: TCPClientActor ref =>
+      // TODO: handle happy eyeballs here - connect count
+      PonyTCP.connect(the_actor, host, port, from, AsioEvent.read_write_oneshot())
+    | let the_actor: TCPAcceptorActor ref =>
+      _event = PonyAsio.create_event(the_actor, fd)
+      open()
+    end
 
   fun ref expect(qty: USize) ? =>
     if qty <= _read_buffer_size then
