@@ -1,11 +1,14 @@
-interface tag TCPListenerActor//[A: TCPAcceptorActor]
+interface tag TCPListenerActor
   new tag create(a: TCPListener iso)
     
   // fun ref bind(a: TCPListener iso)
 
-  fun ref listener(): TCPListener
+  fun ref listener(): TCPListener //=>
+    // let a = TCPListener(auth, host, port.string(), None)
+    // a.listen(this)
+    // a
 
-  fun ref on_accept(fd: U32): TCPConnectionActor// =>
+  fun ref on_accept(fd: U32): TCPConnectionActor
     """
     Called when a connection is accepted
     """
