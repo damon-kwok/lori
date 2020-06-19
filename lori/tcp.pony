@@ -32,7 +32,6 @@ primitive TCPServer[A: TCPListenerActor =TCPSimpleListenActor]
   """
   fun listen(host: String, port: U32, env: Env) =>
     try
-      let aaa = HAHAHA(2,3)
       let auth = TCPListenAuth(env.root as AmbientAuth)
       A(recover TCPListener(auth, host, port.string(), env.out) end)
     end
