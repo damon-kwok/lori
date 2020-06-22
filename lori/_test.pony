@@ -78,32 +78,44 @@ class iso _PingPong is UnitTest
       let ping_auth = TCPConnectAuth(h.env.root as AmbientAuth)
       var ping= TCPConnection[I32](ping_auth, 0)
 
-      let on_cli_data = {(self: TCPConnection[I32] ref, d: Array[U8] iso)=>
-        self.storage= self.storage+1
-        if self.storage < 100 then self.send("Ping") else h.complete(true) end
-      } val
-            
-      ping
-      .> on(CONN,{(self: TCPConnection[I32] ref)=>
-        h.log("ping-start"); self.storage= 1; ping.send("Ping")})
-      .> on(DATA, on_cli_data)
-
-      let on_svr_data = {(c: TCPConnection[I32] ref, d: Array[U8] iso) =>
-        c.storage= c.storage+1
-        if c.storage < 100 then ping.send("Pong") else h.complete(true) end
-      } val
-        
+      // server
       svr
       .> on(START,{(self: TCPListener[None,I32] ref)=> ping.start("127.0.0.1", 7671, "") } val)
       .> on(STOP,{(self: TCPListener[None,I32] ref)=> ping.dispose() } val)
       .> on(ERROR,{(self: TCPListener[None,I32] ref)=> h.fail("Unable to open _TestPongerListener") } val)
       .> on(CONN,{(c: TCPConnection[I32])=> h.log("has new conn!!!") } val)
       .> on(DISCONN,{(c: TCPConnection[I32])=> c.dispose() } val)
-      .> on(DATA, on_svr_data)
+      .> on(DATA, {(c: TCPConnection[I32] ref, d: Array[U8] iso) =>
+        h.log("Pong:"+ c.storage.string())
+        if c.storage < 100 then
+          c.storage= c.storage+1
+          ping.send("Pong")
+        elseif c.storage == 100 then
+          ping.send("Pong")
+        else
+          h.fail("Too many pings received")
+            
+        end } val)
       .> listen("0.0.0.0", 7671)
-      
+
+      // client
+      ping
+      .> on(CONN,{(self: TCPConnection[I32] ref)=>
+        h.log("ping-start")
+        self.storage= 1
+        ping.send("Ping")})
+      .> on(DATA, {(self: TCPConnection[I32] ref, d: Array[U8] iso)=>
+          h.log("Ping:"+ self.storage.string())
+          if self.storage < 100 then
+            self.send("Ping")
+            self.storage= self.storage+1
+          else
+            h.complete(true)
+          end } val)
+
+      // done
       h.dispose_when_done(svr)
-    end
+    end //try
 
     h.long_test(5_000_000_000)
 
@@ -118,12 +130,15 @@ class iso _TestBasicExpect is UnitTest
     try
       let la = TCPListenAuth(h.env.root as AmbientAuth)
       let ca = TCPConnectAuth(h.env.root as AmbientAuth)
-      let s = TCPListener[None, U8](la, None, {():U8 => 0})
-      let c = TCPConnection[None](ca, None)
+      let svr = TCPListener[None, U8](la, None, {():U8 => 0})
+      let cli = TCPConnection[None](ca, None)
 
-      s
-      .> on(START, {(self: TCPListener[None, U8] ref)=> h.complete_action("server listening") }val)
-      .> on(STOP, {(self: TCPListener[None, U8] ref)=> c.dispose() }val)
+      // server
+      svr
+      .> on(START, {(self: TCPListener[None, U8] ref)=>
+        h.complete_action("server listening")
+        cli.start("127.0.0.1", 7672, "") }val)
+      .> on(STOP, {(self: TCPListener[None, U8] ref)=> cli.dispose() }val)
       .> on(ERROR, {(self: TCPListener[None, U8] ref) => h.fail("Unable to open _TestBasicExpectListener") }val)
       .> on(CONN, {(conn: TCPConnection[U8] ref)=> try conn.expect(4)? end}val)
       .> on(DATA, {(conn: TCPConnection[U8] ref, data: Array[U8] iso)=>
@@ -143,22 +158,21 @@ class iso _TestBasicExpect is UnitTest
           h.complete_action("expected data received")
           conn.close()
         end }val)
-      .> listen("127.0.0.1", 7672)
-      
-      c
+      .> listen("0.0.0.0", 7672)
+
+      // client
+      cli
       .> on(CONN, {(self: TCPConnection ref)=>
         h.complete_action("client connected")
         self.send("hi there, how are you???")})
       .> on(DATA, {(self: TCPConnection ref, d: Array[U8] iso)=>
         h.fail("Client shouldn't get data")})
-      .> start("127.0.0.1", 7672, "")
-      
-      // s.on(DATA, {(self: TCPListener[None, U8] ref)=> h.complete_action("client connected")}
 
-      h.dispose_when_done(s)
+      // done
+      h.dispose_when_done(svr)
     else
       h.fail("unable to start _TestBasicExpect")
-    end
+    end // try
 
     h.long_test(2_000_000_000)
 /*
