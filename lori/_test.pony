@@ -42,7 +42,7 @@ class iso _TCPConnectionState is UnitTest
 
   fun tag apply(h: TestHelper) =>
     // TODO: turn this into several different tests
-    let a = TCPConnection.none()
+    let a = TCPConnection[None].none(None)
 
     // a.is_open()
     // h.assert_false(a.is_open())
@@ -73,12 +73,13 @@ class iso _PingPong is UnitTest
     h.log("test==ping-pong>")
     try
       let svr_auth = TCPListenAuth(h.env.root as AmbientAuth)
-      let svr = TCPListener(svr_auth, h.env.out)
+      // var store: I32 iso = recover I32(0) end 
+      let svr = TCPListener[None, I32]({(): I32 => 0 } val, svr_auth, None, h.env.out)
 
       let ping_auth = TCPConnectAuth(h.env.root as AmbientAuth)
-      var ping= TCPConnection(ping_auth, h.env.out)
+      var ping= TCPConnection[I32](ping_auth, 0, h.env.out)
 
-      let on_cli_data = {(d: Array[U8] iso)=>
+      let on_cli_data = {(self: TCPConnection[I32] ref, d: Array[U8] iso)=>
         try
           let str = String.from_array(consume d)
           let n = str.read_int[I32]()?._1
@@ -87,10 +88,10 @@ class iso _PingPong is UnitTest
         }val
             
       ping
-      .> on(CONN,{()=> h.log("ping-start");ping.send("0")})
+      .> on(CONN,{(self: TCPConnection[I32] ref)=> h.log("ping-start");ping.send("0")})
       .> on(DATA, on_cli_data)
 
-      let on_data = {(c: TCPConnection, d: Array[U8] iso) =>
+      let on_data = {(c: TCPConnection[I32], d: Array[U8] iso) =>
         try
           let str = String.from_array(consume d)
           let n = str.read_int[I32]()?._1 + 1
@@ -99,12 +100,12 @@ class iso _PingPong is UnitTest
         } val
         
       svr
+      .> on(START,{(self: TCPListener[None,I32] ref)=> ping.start("127.0.0.1", 7671, "") } val)
+      .> on(STOP,{(self: TCPListener[None,I32] ref)=> ping.dispose() } val)
+      .> on(ERROR,{(self: TCPListener[None,I32] ref)=> h.fail("Unable to open _TestPongerListener") } val)
+      .> on(CONN,{(c: TCPConnection[I32])=> h.log("has new conn!!!") } val)
+      .> on(DISCONN,{(c: TCPConnection[I32])=> c.dispose() } val)
       .> on(DATA, on_data)
-      .> on(START,{()=> ping.start("127.0.0.1", 7671, "") })
-      .> on(STOP,{()=> ping.dispose() })
-      .> on(ERROR,{()=> h.fail("Unable to open _TestPongerListener") })
-      .> on(CONN,{(c: TCPConnection)=> h.log("has new conn!!!")})
-      .> on(DISCONN,{(c: TCPConnection)=> c.dispose() })
       .> listen("0.0.0.0", 7671)
       
       h.dispose_when_done(svr)
