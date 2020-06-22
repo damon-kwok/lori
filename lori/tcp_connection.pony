@@ -106,9 +106,8 @@ actor TCPConnection[A: Any #send = None]
     | UNTHROTTLED => try _on_unthrottled = (f as {(TCPConnection[A] ref)} val) end
     end
 
-  be command(cmd: U32, args: Array[Any] iso) =>
-    None
-    // _on_cmd(this, cmd, args)
+  be command(f: {(TCPConnection[A] ref)} val) =>
+    f(this)
 
   fun ref log(data: ByteSeq) =>
     _on_log(this, data)

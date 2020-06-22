@@ -117,8 +117,8 @@ actor TCPListener[A: Any #send = None, B: Any #send = None]
     """
     close()
     
-  be command[T: Any #send](cmd: U32, args: Array[T] iso) =>
-    None // _on_cmd(this, cmd, args)
+  be command(f: {(TCPListener[A,B] ref)} val) =>
+    f(this)
 
   fun ref log(data: ByteSeq) =>
     _on_log(this, data)
