@@ -74,30 +74,24 @@ class iso _PingPong is UnitTest
     try
       let svr_auth = TCPListenAuth(h.env.root as AmbientAuth)
       // var store: I32 iso = recover I32(0) end 
-      let svr = TCPListener[None, I32]({(): I32 => 0 } val, svr_auth, None, h.env.out)
+      let svr = TCPListener[None, I32](svr_auth, None, h.env.out, {(): I32 => 0 } val)
 
       let ping_auth = TCPConnectAuth(h.env.root as AmbientAuth)
       var ping= TCPConnection[I32](ping_auth, 0, h.env.out)
 
       let on_cli_data = {(self: TCPConnection[I32] ref, d: Array[U8] iso)=>
-        try
-          let str = String.from_array(consume d)
-          let n = str.read_int[I32]()?._1
-          if n < 10 then ping.send((n+1).string()) else h.complete(true) end
-        end
-        }val
+        self.store= self.store+1
+        if self.store < 100 then self.send("Ping") else h.complete(true) end
+      } val
             
       ping
-      .> on(CONN,{(self: TCPConnection[I32] ref)=> h.log("ping-start");ping.send("0")})
+      .> on(CONN,{(self: TCPConnection[I32] ref)=> h.log("ping-start"); self.store= self.store+1; ping.send("Ping")})
       .> on(DATA, on_cli_data)
 
-      let on_data = {(c: TCPConnection[I32], d: Array[U8] iso) =>
-        try
-          let str = String.from_array(consume d)
-          let n = str.read_int[I32]()?._1 + 1
-          if n < 10 then ping.send(n.string()) else h.complete(true) end
-        end
-        } val
+      let on_data = {(c: TCPConnection[I32] ref, d: Array[U8] iso) =>
+        c.store= c.store+1
+        if c.store < 100 then ping.send("Pong") else h.complete(true) end
+      } val
         
       svr
       .> on(START,{(self: TCPListener[None,I32] ref)=> ping.start("127.0.0.1", 7671, "") } val)

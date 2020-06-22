@@ -69,8 +69,8 @@ actor TCPListener[A: Any #send, B: Any #send]
 
   fun ref _on_accept(fd :U32):TCPConnection[B] =>
     /*this, TCPAcceptAuth(_auth),*/
-    let vv': B! = recover _on_store() end
-    TCPConnection[B]._accept(fd, consume vv', _on_conn, _on_disconn, _on_data)
+    let vv': B! = _on_store()
+    TCPConnection[B]._accept(fd, vv', _on_conn, _on_disconn, _on_data)
     
   // be _accept_on_data(conn: TCPConnection, data: Array[U8] iso) =>
     // _on_data(conn, consume data)

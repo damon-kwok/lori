@@ -7,7 +7,7 @@ actor TCPConnection[A: Any #send]
   // var _from: String = ""
   var _event: AsioEventID = AsioEvent.none()
   var _state: U32 = 0
-  var store: A
+  var store: A!
 
   let _pending: List[(ByteSeq, USize)] = _pending.create()
   var _read_buffer: Array[U8] iso = recover Array[U8] end
