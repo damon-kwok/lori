@@ -1,5 +1,6 @@
-// primitive Open
-// primitive Closed
+primitive CMD
+primitive LOG
+
 primitive START
 primitive STOP
 
@@ -13,5 +14,5 @@ primitive THROTTLED
 primitive UNTHROTTLED
 
 type TCPConnectState is (START | STOP)
-type TCPListenEvent is (START | STOP | ACCEPT | CONN | DISCONN | DATA | ERROR)
-type TCPConnectEvent is (CONN | DISCONN | DATA | THROTTLED | UNTHROTTLED)
+type TCPListenEvent is (START | STOP | ACCEPT | CONN | DISCONN | DATA | ERROR | CMD | LOG)
+type TCPConnectEvent is (CONN | DISCONN | DATA | THROTTLED | UNTHROTTLED | CMD | LOG)

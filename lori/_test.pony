@@ -73,11 +73,10 @@ class iso _PingPong is UnitTest
     h.log("test==ping-pong>")
     try
       let svr_auth = TCPListenAuth(h.env.root as AmbientAuth)
-      // var store: I32 iso = recover I32(0) end 
-      let svr = TCPListener[None, I32](svr_auth, None, h.env.out, {(): I32 => 0 } val)
+      let svr = TCPListener[None, I32](svr_auth, None, {(): I32 => 0 } val)
 
       let ping_auth = TCPConnectAuth(h.env.root as AmbientAuth)
-      var ping= TCPConnection[I32](ping_auth, 0, h.env.out)
+      var ping= TCPConnection[I32](ping_auth, 0)
 
       let on_cli_data = {(self: TCPConnection[I32] ref, d: Array[U8] iso)=>
         self.store= self.store+1
@@ -85,7 +84,8 @@ class iso _PingPong is UnitTest
       } val
             
       ping
-      .> on(CONN,{(self: TCPConnection[I32] ref)=> h.log("ping-start"); self.store= self.store+1; ping.send("Ping")})
+      .> on(CONN,{(self: TCPConnection[I32] ref)=>
+        h.log("ping-start"); self.store= self.store+1; ping.send("Ping")})
       .> on(DATA, on_cli_data)
 
       let on_data = {(c: TCPConnection[I32] ref, d: Array[U8] iso) =>

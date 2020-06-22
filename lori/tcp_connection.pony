@@ -1,6 +1,6 @@
 use "collections"
 
-actor TCPConnection[A: Any #send]
+actor TCPConnection[A: Any #send = None]
   var _fd: U32 = -1
   // var _host: String =""
   // var _port: U32 = 0
@@ -8,6 +8,7 @@ actor TCPConnection[A: Any #send]
   var _event: AsioEventID = AsioEvent.none()
   var _state: U32 = 0
   var store: A!
+  var kv: Map[String, A!] =Map[String, A!]
 
   let _pending: List[(ByteSeq, USize)] = _pending.create()
   var _read_buffer: Array[U8] iso = recover Array[U8] end
@@ -18,12 +19,13 @@ actor TCPConnection[A: Any #send]
   var _on_conn: {(TCPConnection[A] ref)} val
   var _on_disconn: {(TCPConnection[A] ref)} val
   var _on_data: {(TCPConnection[A] ref, Array[U8] iso)} val
+  // var _on_cmd: {(TCPConnection[A] ref, U32, Array[Any] iso)} val
+  var _on_log: {(TCPConnection[A] ref, ByteSeq)} val = {(self: TCPConnection[A] ref, data: ByteSeq)=> None }
   var _on_throttled: {(TCPConnection[A] ref)} val
   var _on_unthrottled: {(TCPConnection[A] ref)} val
 
   new create(auth: TCPConnectorAuth,
     store': A,
-    out : OutStream,
     on_conn: (None | {(TCPConnection[A] ref)} val) =None,
     on_disconn: (None | {(TCPConnection[A] ref)} val) =None,
     on_data: (None | {(TCPConnection[A] ref, Array[U8] iso)} val) =None,
@@ -34,23 +36,24 @@ actor TCPConnection[A: Any #send]
     store = consume store'
     _on_conn = match on_conn
     | let fn: {(TCPConnection[A] ref)} val => fn
-    else {(self: TCPConnection[A] ref)=> out.print("Connection!") }
+    else {(self: TCPConnection[A] ref)=> self.log("Connection!") }
     end
     _on_disconn = match on_disconn
     | let fn: {(TCPConnection[A] ref)} val => fn
-    else {(self: TCPConnection[A] ref)=> out.print("Disconnected!") }
+    else {(self: TCPConnection[A] ref)=> self.log("Disconnected!") }
     end
     _on_data = match on_data
     | let fn: {(TCPConnection[A] ref, Array[U8] iso)} val => fn
-    else {(self: TCPConnection[A] ref, data: Array[U8] iso)=> out.print("Data received. Echoing it back.") }
+    else {(self: TCPConnection[A] ref, data: Array[U8] iso)=> self.log("Data received. Echoing it back.") }
     end
+    // _on_cmd = {(self: TCPConnection[A] ref, cmd: U32, args: Array[Any] iso)=> None }
     _on_throttled = match on_throttled
     | let fn: {(TCPConnection[A] ref)} val => fn
-    else {(self: TCPConnection[A] ref)=> out.print("Throttled!") }
+    else {(self: TCPConnection[A] ref)=> self.log("Throttled!") }
     end
     _on_unthrottled = match on_unthrottled
     | let fn: {(TCPConnection[A] ref)} val => fn
-    else {(self: TCPConnection[A] ref)=> out.print("Unthrottled!") }
+    else {(self: TCPConnection[A] ref)=> self.log("Unthrottled!") }
     end
 
   // new _accept[L: Any #send](//listen: TCPListener[L,A],
@@ -64,13 +67,10 @@ actor TCPConnection[A: Any #send]
   =>
     _fd = fd'
     store = consume store'
-    // let self = this
-    // _on_conn = {(self: TCPConnection ref)=> None }
-    // _on_disconn = {(self: TCPConnection ref)=> listen._accept_on_disconn(self) }
-    //_on_data = {(self: TCPConnection ref, data: Array[U8] iso) => listen._on_data(self, consume data) /*_accept_on_data(self, consume data)*/ }
     _on_conn = fn_conn
     _on_disconn = fn_disconn
     _on_data = fn_data
+    // _on_cmd = {(self: TCPConnection[A] ref, cmd: U32, args: Array[Any] iso)=> None }
     _on_throttled = {(self: TCPConnection[A] ref)=> None }
     _on_unthrottled = {(self: TCPConnection[A] ref)=> None }
     _event = PonyAsio.create_event(this, _fd)
@@ -84,6 +84,7 @@ actor TCPConnection[A: Any #send]
     _on_disconn = {(self: TCPConnection[A] ref)=> None }
     _on_conn = {(self: TCPConnection[A] ref)=> None }
     _on_data = {(self: TCPConnection[A] ref, data: Array[U8] iso)=> None }
+    // _on_cmd = {(self: TCPConnection[A] ref, cmd: U32, args: Array[Any] iso)=> None }
     _on_throttled = {(self: TCPConnection[A] ref)=> None }
     _on_unthrottled = {(self: TCPConnection[A] ref)=> None }
 
@@ -97,10 +98,19 @@ actor TCPConnection[A: Any #send]
     match ev
     | CONN => try _on_conn = (f as {(TCPConnection[A] ref)} val) end
     | DISCONN => try _on_disconn = (f as {(TCPConnection[A] ref)} val) end
-    | DATA => try _on_data = (f as {(TCPConnection[A] ref, Array[U8] iso)} val) end 
+    | DATA => try _on_data = (f as {(TCPConnection[A] ref, Array[U8] iso)} val) end
+    // | CMD => try _on_cmd = (f as {(TCPConnection[A] ref, U32, Array[Any] iso)} val) end
+    | LOG => try _on_log = (f as {(TCPConnection[A] ref, ByteSeq)} val) end
     | THROTTLED => try _on_throttled = (f as {(TCPConnection[A] ref)} val) end
     | UNTHROTTLED => try _on_unthrottled = (f as {(TCPConnection[A] ref)} val) end
     end
+
+  be command(cmd: U32, args: Array[Any] iso) =>
+    None
+    // _on_cmd(this, cmd, args)
+
+  fun ref log(data: ByteSeq) =>
+    _on_log(this, data)
 
   fun ref _expect(qty: USize) ? =>
     if qty <= _read_buffer_size then

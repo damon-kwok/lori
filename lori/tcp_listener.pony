@@ -1,5 +1,8 @@
-actor TCPListener[A: Any #send, B: Any #send]
-  var store: A
+use "collections"
+
+actor TCPListener[A: Any #send = None, B: Any #send = None]
+  var storage: A!
+  var kv: Map[String, A!] =Map[String, A!] 
   // let _auth: TCPListenerAuth
   var _host: String ="0.0.0.0"
   var _port: U32 =7669
@@ -8,18 +11,20 @@ actor TCPListener[A: Any #send, B: Any #send]
   var _event: AsioEventID = AsioEvent.none()
   
   // var _on_accept: {(U32): TCPConnection} val
-  var _on_store: {():B} val
+  var _on_storage: {():B} val
   var _on_start: {(TCPListener[A,B] ref)} val
   var _on_stop: {(TCPListener[A,B] ref)} val
   var _on_error: {(TCPListener[A,B] ref)} val
   var _on_conn: {(TCPConnection[B] ref)} val
   var _on_disconn: {(TCPConnection[B] ref)} val
   var _on_data: {(TCPConnection[B] ref, Array[U8] iso)} val
+  // var _on_cmd: {(TCPListener[A,B] ref, U32, Array[E] iso)} val
+  var _on_log: {(TCPListener[A,B] ref, ByteSeq)} val = {(self: TCPListener[A,B] ref, data: ByteSeq)=> None }
 
   new create(auth: TCPListenerAuth,
-    store': A,
-    out: OutStream,
-    on_store': {():B} val,
+    storage': A,
+    // out: OutStream,
+    on_storage': {():B} val,
     on_start': (None | {()} val) =None,
     on_stop': (None | {()} val) =None,
     on_error': (None | {()} val) =None,
@@ -27,59 +32,54 @@ actor TCPListener[A: Any #send, B: Any #send]
     on_conn': (None | {(TCPConnection[B] ref)} val) =None,
     on_disconn': (None | {(TCPConnection[B] ref)} val) =None,
     on_data': (None | {(TCPConnection[B] ref, Array[U8] iso)} val) =None)
+    // on_cmd': (None | {(TCPListener[A,B] ref, U32, Array[Any] iso)} val) = None)
   =>
     // _auth = auth
-    store = consume store'
-    _on_store = on_store'
+    storage = consume storage'
+    _on_storage = on_storage'
     _on_start = match on_start'
     | let fn: {(TCPListener[A,B] ref)} val => fn
-    else {(self: TCPListener[A,B] ref)=> out.print("Echo server started.") }
+    else {(self: TCPListener[A,B] ref)=> self.log("Echo server started.") }
     end
     _on_stop = match on_stop'
     | let fn: {(TCPListener[A,B] ref)} val => fn
-    else {(self: TCPListener[A,B] ref)=> out.print("Echo server shut down.") }
+    else {(self: TCPListener[A,B] ref)=> self.log("Echo server shut down.") }
     end
     _on_error = match on_error'
     | let fn: {(TCPListener[A,B] ref)} val => fn
-    else {(self: TCPListener[A,B] ref)=> out.print("Couldn't start Echo server. Perhaps try another network interface?") }
+    else {(self: TCPListener[A,B] ref)=> self.log("Couldn't start Echo server. Perhaps try another network interface?") }
     end
+    // _on_cmd = {(conn: TCPListener[A, B] ref, cmd: U32, args: Array[E] iso) => None }
     _on_conn = match on_conn'
     | let fn: {(TCPConnection[B] ref)} val => fn
-    else {(conn: TCPConnection[B] ref)=> out.print("We have a new connection!") }
+    else {(conn: TCPConnection[B] ref)=> conn.log("We have a new connection!") }
     end
     _on_disconn = match on_disconn'
     | let fn: {(TCPConnection[B] ref)} val => fn
-    else {(conn: TCPConnection[B] ref)=> out.print("Connection Closed.") }
+    else {(conn: TCPConnection[B] ref)=> conn.log("Connection Closed.") }
     end
     _on_data = match on_data'
     | let fn: {(TCPConnection[B] ref, Array[U8] iso)} val => fn
     else
-      {(conn: TCPConnection[B] ref, data: Array[U8] iso) => out.print(consume data) }
+      {(conn: TCPConnection[B] ref, data: Array[U8] iso) => conn.log(consume data) }
     end
+    
 
-  new none(store' :A, on_store': {():B} val) =>
-    store = consume store'
-    _on_store = on_store'
+  new none(storage' :A, on_storage': {():B} val) =>
+    storage = consume storage'
+    _on_storage = on_storage'
     _on_start = {(self: TCPListener[A,B] ref)=> None }
     _on_stop = {(self: TCPListener[A,B] ref)=> None }
     _on_error = {(self: TCPListener[A,B] ref)=> None }
+    // _on_cmd = {(conn: TCPListener[A, B] ref, cmd: U32, args: Array[E] iso) => None }
     _on_conn = {(conn: TCPConnection[B] ref)=> None }
     _on_disconn = {(conn: TCPConnection[B] ref)=> None }
     _on_data = {(conn: TCPConnection[B] ref, data: Array[U8] iso)=> None }
-
+    
   fun ref _on_accept(fd :U32):TCPConnection[B] =>
     /*this, TCPAcceptAuth(_auth),*/
-    let vv': B! = _on_store()
+    let vv': B! = _on_storage()
     TCPConnection[B]._accept(fd, vv', _on_conn, _on_disconn, _on_data)
-    
-  // be _accept_on_data(conn: TCPConnection, data: Array[U8] iso) =>
-    // _on_data(conn, consume data)
-
-  // be _accept_on_conn(conn: TCPConnection) =>
-    // _on_conn(conn)
-    
-  // be _accept_on_disconn(conn: TCPConnection) =>
-    // _on_disconn(conn)
 
   be on(ev: TCPListenEvent, f:
     ({(TCPListener[A,B] ref)} val | {(TCPConnection[B] ref)} val | {(TCPConnection[B] ref, Array[U8] iso)} val))
@@ -88,6 +88,8 @@ actor TCPListener[A: Any #send, B: Any #send]
     | START => try _on_start = (f as {(TCPListener[A,B] ref)} val) end
     | STOP => try _on_stop = (f as {(TCPListener[A,B] ref)} val) end
     | ERROR => try _on_error = (f as {(TCPListener[A,B] ref)} val) end
+    // | CMD => try _on_cmd = (f as {(TCPListener[A,B] ref, U32, Array[E] iso)} val) end
+    | LOG => try _on_log = (f as {(TCPListener[A,B] ref, ByteSeq)} val) end
     // | ACCEPT => try _on_accept = (f as {(U32): TCPConnection} val) end
     | CONN => try _on_conn = (f as {(TCPConnection[B])} val) end
     | DISCONN => try _on_disconn = (f as {(TCPConnection[B])} val) end
@@ -115,9 +117,12 @@ actor TCPListener[A: Any #send, B: Any #send]
     """
     close()
     
-  // be event_notify(flags: U32, arg: U32) =>
-    // _event_notify(_event, flags, arg)
+  be command[T: Any #send](cmd: U32, args: Array[T] iso) =>
+    None // _on_cmd(this, cmd, args)
 
+  fun ref log(data: ByteSeq) =>
+    _on_log(this, data)
+    
   fun ref close() =>
     if _state is START then
       _state = STOP
