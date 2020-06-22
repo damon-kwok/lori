@@ -7,7 +7,7 @@ actor TCPConnection[A: Any #send = None]
   // var _from: String = ""
   var _event: AsioEventID = AsioEvent.none()
   var _state: U32 = 0
-  var store: A!
+  var storage: A!
   var kv: Map[String, A!] =Map[String, A!]
 
   let _pending: List[(ByteSeq, USize)] = _pending.create()
@@ -25,7 +25,7 @@ actor TCPConnection[A: Any #send = None]
   var _on_unthrottled: {(TCPConnection[A] ref)} val
 
   new create(auth: TCPConnectorAuth,
-    store': A,
+    storage': A,
     on_conn: (None | {(TCPConnection[A] ref)} val) =None,
     on_disconn: (None | {(TCPConnection[A] ref)} val) =None,
     on_data: (None | {(TCPConnection[A] ref, Array[U8] iso)} val) =None,
@@ -33,7 +33,7 @@ actor TCPConnection[A: Any #send = None]
     on_unthrottled: (None | {(TCPConnection[A] ref)} val) =None)
   =>
     // TODO: handle happy eyeballs here - connect count
-    store = consume store'
+    storage = consume storage'
     _on_conn = match on_conn
     | let fn: {(TCPConnection[A] ref)} val => fn
     else {(self: TCPConnection[A] ref)=> self.log("Connection!") }
@@ -60,13 +60,13 @@ actor TCPConnection[A: Any #send = None]
   new _accept(
     // auth: TCPAcceptorAuth,
     fd': U32,
-    store': A!,
+    storage': A!,
     fn_conn: {(TCPConnection[A] ref)} val,
     fn_disconn: {(TCPConnection[A] ref)} val,
     fn_data: {(TCPConnection[A] ref, Array[U8] iso)} val)
   =>
     _fd = fd'
-    store = consume store'
+    storage = consume storage'
     _on_conn = fn_conn
     _on_disconn = fn_disconn
     _on_data = fn_data
@@ -76,11 +76,11 @@ actor TCPConnection[A: Any #send = None]
     _event = PonyAsio.create_event(this, _fd)
     _open()
 
-  new none(store': A) =>
+  new none(storage': A) =>
     """
     For initializing an empty variable
     """
-    store = consume store'
+    storage = consume storage'
     _on_disconn = {(self: TCPConnection[A] ref)=> None }
     _on_conn = {(self: TCPConnection[A] ref)=> None }
     _on_data = {(self: TCPConnection[A] ref, data: Array[U8] iso)=> None }
@@ -88,7 +88,7 @@ actor TCPConnection[A: Any #send = None]
     _on_throttled = {(self: TCPConnection[A] ref)=> None }
     _on_unthrottled = {(self: TCPConnection[A] ref)=> None }
 
-  be start(host: String, port: U32, from: String)=>
+  be start(host: String, port: U32, from: String="")=>
     if is_closed() then
       PonyTCP.connect(this, host, port.string(), from,
       AsioEvent.read_write_oneshot())
@@ -112,7 +112,7 @@ actor TCPConnection[A: Any #send = None]
   fun ref log(data: ByteSeq) =>
     _on_log(this, data)
 
-  fun ref _expect(qty: USize) ? =>
+  fun ref expect(qty: USize) ? =>
     if qty <= _read_buffer_size then
       _expect_size = qty
     else

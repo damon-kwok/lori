@@ -11,7 +11,7 @@ actor Main is TestList
     test(_BitSet)
     // test(_TCPConnectionState)
     test(_PingPong)
-    // test(_TestBasicExpect)
+    test(_TestBasicExpect)
 
 class iso _BitSet is UnitTest
   fun name(): String => "BitSet"
@@ -79,18 +79,18 @@ class iso _PingPong is UnitTest
       var ping= TCPConnection[I32](ping_auth, 0)
 
       let on_cli_data = {(self: TCPConnection[I32] ref, d: Array[U8] iso)=>
-        self.store= self.store+1
-        if self.store < 100 then self.send("Ping") else h.complete(true) end
+        self.storage= self.storage+1
+        if self.storage < 100 then self.send("Ping") else h.complete(true) end
       } val
             
       ping
       .> on(CONN,{(self: TCPConnection[I32] ref)=>
-        h.log("ping-start"); self.store= self.store+1; ping.send("Ping")})
+        h.log("ping-start"); self.storage= 1; ping.send("Ping")})
       .> on(DATA, on_cli_data)
 
-      let on_data = {(c: TCPConnection[I32] ref, d: Array[U8] iso) =>
-        c.store= c.store+1
-        if c.store < 100 then ping.send("Pong") else h.complete(true) end
+      let on_svr_data = {(c: TCPConnection[I32] ref, d: Array[U8] iso) =>
+        c.storage= c.storage+1
+        if c.storage < 100 then ping.send("Pong") else h.complete(true) end
       } val
         
       svr
@@ -99,14 +99,14 @@ class iso _PingPong is UnitTest
       .> on(ERROR,{(self: TCPListener[None,I32] ref)=> h.fail("Unable to open _TestPongerListener") } val)
       .> on(CONN,{(c: TCPConnection[I32])=> h.log("has new conn!!!") } val)
       .> on(DISCONN,{(c: TCPConnection[I32])=> c.dispose() } val)
-      .> on(DATA, on_data)
+      .> on(DATA, on_svr_data)
       .> listen("0.0.0.0", 7671)
       
       h.dispose_when_done(svr)
     end
 
     h.long_test(5_000_000_000)
-/*
+
 class iso _TestBasicExpect is UnitTest
   fun name(): String => "TestBasicExpect"
 
@@ -118,7 +118,42 @@ class iso _TestBasicExpect is UnitTest
     try
       let la = TCPListenAuth(h.env.root as AmbientAuth)
       let ca = TCPConnectAuth(h.env.root as AmbientAuth)
-      let s = _TestBasicExpectListener(la, ca, h)
+      let s = TCPListener[None, U8](la, None, {():U8 => 0})
+      let c = TCPConnection[None](ca, None)
+
+      s
+      .> on(START, {(self: TCPListener[None, U8] ref)=> h.complete_action("server listening") }val)
+      .> on(STOP, {(self: TCPListener[None, U8] ref)=> c.dispose() }val)
+      .> on(ERROR, {(self: TCPListener[None, U8] ref) => h.fail("Unable to open _TestBasicExpectListener") }val)
+      .> on(CONN, {(conn: TCPConnection[U8] ref)=> try conn.expect(4)? end}val)
+      .> on(DATA, {(conn: TCPConnection[U8] ref, data: Array[U8] iso)=>
+        conn.storage = conn.storage + 1
+        if conn.storage == 1 then
+          h.assert_eq[String]("hi t", String.from_array(consume data))
+        elseif conn.storage == 2 then
+          h.assert_eq[String]("here", String.from_array(consume data))
+        elseif conn.storage == 3 then
+          h.assert_eq[String](", ho", String.from_array(consume data))
+        elseif conn.storage == 4 then
+          h.assert_eq[String]("w ar", String.from_array(consume data))
+        elseif conn.storage == 5 then
+          h.assert_eq[String]("e yo", String.from_array(consume data))
+        elseif conn.storage == 6 then
+          h.assert_eq[String]("u???", String.from_array(consume data))
+          h.complete_action("expected data received")
+          conn.close()
+        end }val)
+      .> listen("127.0.0.1", 7672)
+      
+      c
+      .> on(CONN, {(self: TCPConnection ref)=>
+        h.complete_action("client connected")
+        self.send("hi there, how are you???")})
+      .> on(DATA, {(self: TCPConnection ref, d: Array[U8] iso)=>
+        h.fail("Client shouldn't get data")})
+      .> start("127.0.0.1", 7672, "")
+      
+      // s.on(DATA, {(self: TCPListener[None, U8] ref)=> h.complete_action("client connected")}
 
       h.dispose_when_done(s)
     else
@@ -126,7 +161,7 @@ class iso _TestBasicExpect is UnitTest
     end
 
     h.long_test(2_000_000_000)
-
+/*
 actor _TestBasicExpectClient// is TCPClientActor
   var _connection: TCPConnection = TCPConnection.none()
   let _h: TestHelper
@@ -144,6 +179,7 @@ actor _TestBasicExpectClient// is TCPClientActor
 
   fun ref on_received(data: Array[U8] iso) =>
     _h.fail("Client shouldn't get data")
+
 actor _TestBasicExpectListener// is TCPListenerActor
   let _h: TestHelper
   var _listener: TCPListener = TCPListener.none()
