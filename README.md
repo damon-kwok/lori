@@ -24,8 +24,8 @@ actor Main
   new create(env: Env) =>
     try
       let auth = TCPListenAuth(env.root as AmbientAuth)
-      TCPListener(auth, env.out)
-      .> on(DATA, {(c: TCPConnection, d: Array[U8] iso) => c.send(consume d) })
+      TCPListener(auth, None, {():None => None} val)
+      .> on(DATA, {(c: TCPConnection ref, d: Array[U8] iso) => c.send(consume d) })
       .> listen("0.0.0.0", 7669)
     end
 ```
@@ -36,10 +36,10 @@ actor Main
   new create(env: Env) =>
     try
       let auth = TCPConnectAuth(env.root as AmbientAuth)
-      let cli = TCPConnection(auth, env.out)
-      cli .> on(CONN, {() =>cli.send("Hello!")})
-          .> on(DATA, {(d: Array[U8] iso) => env.out.print(consume d) })
-          .> start("127.0.0.1", 7669, "localhost")
+      TCPConnection(auth, None)
+      .> on(CONN, {(self: TCPConnection ref) =>self.send("Hello!")})
+      .> on(DATA, {(self: TCPConnection ref, d: Array[U8] iso) => self.log(consume d) })
+      .> start("127.0.0.1", 7669, "localhost")
     end
 ```
 
@@ -53,19 +53,18 @@ actor Main
       let conn_auth = TCPConnectAuth(env.root as AmbientAuth)
 
       // server
-      // let svr = TCPListener(listen_auth, env.out)
-      TCPListener(listen_auth, env.out)
-      .> on(DATA, {(conn: TCPConnection, data: Array[U8] iso) =>
-           env.out.print(consume data)
+      TCPListener(listen_auth, None, {():None=> None})
+      .> on(DATA, {(conn: TCPConnection ref, data: Array[U8] iso) =>
+           conn.log(consume data)
            conn.send("Pong") })
       .> listen("0.0.0.0", 7670)
 
       // client
-      let cli = TCPConnection(conn_auth,  env.out)
-      cli .> on(CONN, {() =>cli.send("Ping")})
-          .> on(DATA, {(data: Array[U8] iso) =>
-               env.out.print(consume data)
-               cli.send("Ping") })
-          .> start("127.0.0.1", 7670, "")
+      let cli = TCPConnection(conn_auth, None)
+      .> on(CONN, {(self: TCPConnection ref) => self.send("Ping")})
+      .> on(DATA, {(self: TCPConnection ref,  data: Array[U8] iso) =>
+           self.log(consume data)
+           self.send("Ping") })
+      .> start("127.0.0.1", 7670, "")
     end
 ```
