@@ -74,6 +74,7 @@ actor TCPConnection[A: Any #send = None]
     _on_throttled = {(self: TCPConnection[A] ref)=> None }
     _on_unthrottled = {(self: TCPConnection[A] ref)=> None }
     _event = PonyAsio.create_event(this, _fd)
+    _on_conn(this)
     _open()
 
   new none(storage': A) =>

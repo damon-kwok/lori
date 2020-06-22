@@ -91,9 +91,9 @@ actor TCPListener[A: Any #send = None, B: Any #send = None]
     // | CMD => try _on_cmd = (f as {(TCPListener[A,B] ref, U32, Array[E] iso)} val) end
     | LOG => try _on_log = (f as {(TCPListener[A,B] ref, ByteSeq)} val) end
     // | ACCEPT => try _on_accept = (f as {(U32): TCPConnection} val) end
-    | CONN => try _on_conn = (f as {(TCPConnection[B])} val) end
-    | DISCONN => try _on_disconn = (f as {(TCPConnection[B])} val) end
-    | DATA => try _on_data = (f as {(TCPConnection[B], Array[U8] iso)} val) end
+    | CONN => try _on_conn = (f as {(TCPConnection[B] ref)} val) end
+    | DISCONN => try _on_disconn = (f as {(TCPConnection[B] ref)} val) end
+    | DATA => try _on_data = (f as {(TCPConnection[B] ref, Array[U8] iso)} val) end
     end
   
   be listen(host: String val, port: U32 val) =>

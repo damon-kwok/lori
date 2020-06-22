@@ -8,7 +8,7 @@ actor Main is TestList
     None
 
   fun tag tests(test: PonyTest) =>
-    test(_BitSet)
+    // test(_BitSet)
     // test(_TCPConnectionState)
     test(_PingPong)
     test(_TestBasicExpect)
@@ -83,15 +83,15 @@ class iso _PingPong is UnitTest
       .> on(START,{(self: TCPListener[None,I32] ref)=> ping.start("127.0.0.1", 7671, "") } val)
       .> on(STOP,{(self: TCPListener[None,I32] ref)=> ping.dispose() } val)
       .> on(ERROR,{(self: TCPListener[None,I32] ref)=> h.fail("Unable to open _TestPongerListener") } val)
-      .> on(CONN,{(c: TCPConnection[I32])=> h.log("has new conn!!!") } val)
-      .> on(DISCONN,{(c: TCPConnection[I32])=> c.dispose() } val)
+      .> on(CONN,{(c: TCPConnection[I32] ref)=> h.log("has new conn!!!") } val)
+      .> on(DISCONN,{(c: TCPConnection[I32] ref)=> c.dispose() } val)
       .> on(DATA, {(c: TCPConnection[I32] ref, d: Array[U8] iso) =>
         h.log("Pong:"+ c.storage.string())
-        if c.storage < 100 then
+        if c.storage < 10 then
+          c.send("Pong")
           c.storage= c.storage+1
-          ping.send("Pong")
-        elseif c.storage == 100 then
-          ping.send("Pong")
+        elseif c.storage == 10 then
+          c.send("Pong")
         else
           h.fail("Too many pings received")
             
@@ -102,11 +102,11 @@ class iso _PingPong is UnitTest
       ping
       .> on(CONN,{(self: TCPConnection[I32] ref)=>
         h.log("ping-start")
-        self.storage= 1
-        ping.send("Ping")})
+        self.send("Ping")
+        self.storage= 1 })
       .> on(DATA, {(self: TCPConnection[I32] ref, d: Array[U8] iso)=>
           h.log("Ping:"+ self.storage.string())
-          if self.storage < 100 then
+          if self.storage < 10 then
             self.send("Ping")
             self.storage= self.storage+1
           else
@@ -140,7 +140,7 @@ class iso _TestBasicExpect is UnitTest
         cli.start("127.0.0.1", 7672, "") }val)
       .> on(STOP, {(self: TCPListener[None, U8] ref)=> cli.dispose() }val)
       .> on(ERROR, {(self: TCPListener[None, U8] ref) => h.fail("Unable to open _TestBasicExpectListener") }val)
-      .> on(CONN, {(conn: TCPConnection[U8] ref)=> try conn.expect(4)? end}val)
+      .> on(CONN, {(conn: TCPConnection[U8] ref)=> try h.log("------------expect:4");conn.expect(4)? end}val)
       .> on(DATA, {(conn: TCPConnection[U8] ref, data: Array[U8] iso)=>
         conn.storage = conn.storage + 1
         if conn.storage == 1 then
