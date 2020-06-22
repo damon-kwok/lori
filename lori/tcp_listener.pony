@@ -1,17 +1,25 @@
 type TCPListenerAuth is (AmbientAuth | NetAuth | TCPAuth | TCPListenAuth)
 
-class TCPListener
-  let host: String
-  let port: String
-  var _event: AsioEventID = AsioEvent.none()
-  var _fd: U32 = -1
-  var state: TCPConnectionState = Closed
-  var _enclosing: (TCPListenerActor ref | None)
+primitive TCPListener
+  // let host: String
+  // let port: String
+  // var _event: AsioEventID = AsioEvent.none()
+  // var _fd: U32 = -1
+  // var state: TCPConnectionState = Closed
+  // var _enclosing: (TCPListenerActor ref | None)
 
-  new create(auth: TCPListenerAuth, host': String, port': String, enclosing: TCPListenerActor ref) =>
-    host = host'
-    port = port'
-    _enclosing = enclosing
+  fun listen(auth: TCPListenerAuth, host': String, port': String,
+    enclosing: TCPListenerActor ref):(String, String, AsioEventID, U32):TCPListenerActor
+  =>
+    // host = host'
+    // port = port'
+    // _enclosing = enclosing
+    
+    // var _event: AsioEventID = AsioEvent.none()
+    var _fd: U32 = -1
+    var state: TCPConnectionState = Closed
+    var _enclosing: (TCPListenerActor ref | None) =enclosing 
+  
     let event = PonyTCP.listen(enclosing, host, port)
     if not event.is_null() then
       _fd = PonyAsio.event_fd(event)
@@ -21,11 +29,12 @@ class TCPListener
     else
       enclosing.on_failure()
     end
+    (host', port', event, _fd, state)
 
-  new none() =>
-    host = ""
-    port = ""
-    _enclosing = None
+  // new none() =>
+    // host = ""
+    // port = ""
+    // _enclosing = None
 
   fun ref close() =>
     match _enclosing
