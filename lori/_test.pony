@@ -8,8 +8,8 @@ actor Main is TestList
     None
 
   fun tag tests(test: PonyTest) =>
-    // test(_BitSet)
-    // test(_TCPConnectionState)
+    test(_BitSet)
+    test(_TCPConnectionState)
     test(_PingPong)
     test(_TestBasicExpect)
 
