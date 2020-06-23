@@ -42,26 +42,25 @@ class iso _TCPConnectionState is UnitTest
 
   fun tag apply(h: TestHelper) =>
     // TODO: turn this into several different tests
-    let a = TCPConnection[None].none(None)
-
-    // a.is_open()
-    // h.assert_false(a.is_open())
-    // a.open()
-    // h.assert_true(a.is_open())
-    // a.close()
-    // h.assert_true(a.is_closed())
-    // a.open()
-    // h.assert_true(a.is_open())
-    // h.assert_true(a.is_writeable())
-    // h.assert_true(a.is_open())
-    // a.throttled()
-    // h.assert_true(a.is_throttled())
-    // h.assert_false(a.is_writeable())
-    // h.assert_true(a.is_open())
-    // a.writeable()
-    // h.assert_true(a.is_writeable())
-    // a.writeable()
-    // h.assert_true(a.is_writeable())
+    TCPConnection[None].none(None, {(a: TCPConnection[None] ref)=>
+      a.is_open()
+      h.assert_false(a.is_open())
+      a.open()
+      h.assert_true(a.is_open())
+      a.close()
+      h.assert_true(a.is_closed())
+      a.open()
+      h.assert_true(a.is_open())
+      h.assert_true(a.is_writeable())
+      h.assert_true(a.is_open())
+      a.throttled()
+      h.assert_true(a.is_throttled())
+      h.assert_false(a.is_writeable())
+      h.assert_true(a.is_open())
+      a.writeable()
+      h.assert_true(a.is_writeable())
+      a.writeable()
+      h.assert_true(a.is_writeable()) })
 
 class iso _PingPong is UnitTest
   """
@@ -73,18 +72,18 @@ class iso _PingPong is UnitTest
     h.log("test==ping-pong>")
     try
       let svr_auth = TCPListenAuth(h.env.root as AmbientAuth)
-      let svr = TCPListener[None, I32](svr_auth, None, {(): I32 => 0 } val)
+      let svr = TCPListener[None, I32](svr_auth, None, {(): I32 => 0 })
 
       let ping_auth = TCPConnectAuth(h.env.root as AmbientAuth)
       var ping= TCPConnection[I32](ping_auth, 0)
 
       // server
       svr
-      .> on(START,{(self: TCPListener[None,I32] ref)=> ping.start("127.0.0.1", 7671, "") } val)
-      .> on(STOP,{(self: TCPListener[None,I32] ref)=> ping.dispose() } val)
-      .> on(ERROR,{(self: TCPListener[None,I32] ref)=> h.fail("Unable to open _TestPongerListener") } val)
-      .> on(CONN,{(c: TCPConnection[I32] ref)=> h.log("has new conn!!!") } val)
-      .> on(DISCONN,{(c: TCPConnection[I32] ref)=> c.dispose() } val)
+      .> on(START,{(self: TCPListener[None,I32] ref)=> ping.start("127.0.0.1", 7671, "") }val)
+      .> on(STOP,{(self: TCPListener[None,I32] ref)=> ping.dispose() }val)
+      .> on(ERROR,{(self: TCPListener[None,I32] ref)=> h.fail("Unable to open _TestPongerListener") }val)
+      .> on(CONN,{(c: TCPConnection[I32] ref)=> h.log("has new conn!!!") }val)
+      .> on(DISCONN,{(c: TCPConnection[I32] ref)=> c.dispose() })
       .> on(DATA, {(c: TCPConnection[I32] ref, d: Array[U8] iso) =>
         h.log("Pong:"+ c.storage.string())
         if c.storage < 10 then
@@ -95,7 +94,7 @@ class iso _PingPong is UnitTest
         else
           h.fail("Too many pings received")
             
-        end } val)
+        end })
       .> listen("0.0.0.0", 7671)
 
       // client
@@ -111,7 +110,7 @@ class iso _PingPong is UnitTest
             self.storage= self.storage+1
           else
             h.complete(true)
-          end } val)
+          end })
 
       // done
       h.dispose_when_done(svr)
@@ -157,7 +156,7 @@ class iso _TestBasicExpect is UnitTest
           h.assert_eq[String]("u???", String.from_array(consume data))
           h.complete_action("expected data received")
           conn.close()
-        end }val)
+        end })
       .> listen("0.0.0.0", 7672)
 
       // client
