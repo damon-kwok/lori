@@ -75,9 +75,11 @@ actor TCPConnection[A: Any #send = None]
     _on_unthrottled = {(self: TCPConnection[A] ref)=> None }
     _event = PonyAsio.create_event(this, _fd)
     _on_conn(this)
-    _open()
+    open()
 
-  new none(storage': A) =>
+  new none(storage': A, on_test: {(TCPConnection[A] ref)} val
+    = {(self: TCPConnection[A] ref)=> None })
+  =>
     """
     For initializing an empty variable
     """
@@ -88,6 +90,7 @@ actor TCPConnection[A: Any #send = None]
     // _on_cmd = {(self: TCPConnection[A] ref, cmd: U32, args: Array[Any] iso)=> None }
     _on_throttled = {(self: TCPConnection[A] ref)=> None }
     _on_unthrottled = {(self: TCPConnection[A] ref)=> None }
+    on_test(this)
 
   be start(host: String, port: U32, from: String="")=>
     if is_closed() then
@@ -122,7 +125,7 @@ actor TCPConnection[A: Any #send = None]
       error
     end
 
-  fun ref _open() =>
+  fun ref open() =>
     """
     TODO: should this be private? I think so.
     I don't think the actor that is using the connection should
@@ -133,15 +136,15 @@ actor TCPConnection[A: Any #send = None]
     seems like no need to call from external
     """
     _state = BitSet.set(_state, 0)
-    _writeable()
+    writeable()
 
   fun is_open(): Bool =>
     BitSet.is_set(_state, 0)
 
-  be close() =>
+  fun ref close() =>
     if is_open() then
       _state = BitSet.unset(_state, 0)
-      _unwriteable()
+      unwriteable()
       PonyTCP.shutdown(_fd)
       PonyAsio.unsubscribe(_event)
       _fd = -1
@@ -152,7 +155,7 @@ actor TCPConnection[A: Any #send = None]
 
   be send(data: ByteSeq) =>
     if is_open() then
-      if _is_writeable() then
+      if is_writeable() then
         if _has_pending_writes() then
           try
             let len = PonyTCP.send(_event, data)?
@@ -179,7 +182,7 @@ actor TCPConnection[A: Any #send = None]
     end
 
   fun ref _send_pending_writes() =>
-    while _is_writeable() and _has_pending_writes() do
+    while is_writeable() and _has_pending_writes() do
       try
         let node = _pending.head()?
         (let data, let offset) = node()?
@@ -205,13 +208,13 @@ actor TCPConnection[A: Any #send = None]
       _release_backpressure()
     end
 
-  fun _is_writeable(): Bool =>
+  fun is_writeable(): Bool =>
     BitSet.is_set(_state, 1)
 
-  fun ref _writeable() =>
+  fun ref writeable() =>
     _state = BitSet.set(_state, 1)
 
-  fun ref _unwriteable() =>
+  fun ref unwriteable() =>
     _state = BitSet.unset(_state, 1)
 
   fun ref _read() =>
@@ -276,29 +279,29 @@ actor TCPConnection[A: Any #send = None]
     end
 
   fun ref _apply_backpressure() =>
-    if not _is_throttled() then
-      _throttled()
+    if not is_throttled() then
+      throttled()
       _on_throttled(this)
     end
 
   fun ref _release_backpressure() =>
-    if _is_throttled() then
-      _unthrottled()
+    if is_throttled() then
+      unthrottled()
       _on_unthrottled(this)
     end
 
-  fun _is_throttled(): Bool =>
+  fun is_throttled(): Bool =>
     BitSet.is_set(_state, 2)
 
-  fun ref _throttled() =>
+  fun ref throttled() =>
     _state = BitSet.set(_state, 2)
     // throttled means we are also unwriteable
     // being unthrottled doesn't however mean we are writable
-    _unwriteable()
+    unwriteable()
     PonyAsio.set_unwriteable(_event)
     PonyAsio.resubscribe_write(_event)
 
-  fun ref _unthrottled() =>
+  fun ref unthrottled() =>
     _state = BitSet.unset(_state, 2)
 
   fun _has_pending_writes(): Bool =>
@@ -314,7 +317,7 @@ actor TCPConnection[A: Any #send = None]
         // more logic needs to go here
         _fd = PonyAsio.event_fd(event)
         _event = event
-        _open()
+        open()
         _on_conn(this)
         _read()
       end
@@ -327,7 +330,7 @@ actor TCPConnection[A: Any #send = None]
       end
 
       if AsioEvent.writeable(flags) then
-        _writeable()
+        writeable()
         _send_pending_writes()
       end
 
